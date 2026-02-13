@@ -1,7 +1,9 @@
+# Makefile Blindado para chepeC4 - Correccion de SSE
 CXX = g++
 CC = gcc
 WINDRES = windres
 
+# Rutas validadas
 INC = -I. \
       -I../libraries \
       -I../libraries/win \
@@ -10,7 +12,9 @@ INC = -I. \
       -I../libraries/vst/pluginterfaces/vst2.x \
       -I../libraries/sp
 
-CXXFLAGS = -O2 -m32 -fpermissive $(INC) -D_WIN32_WINNT=0x0600 -w
+# CAMBIO CLAVE: Agregamos -fpermissive y forzamos el estándar C++11 
+# para que acepte los operadores de __m128
+CXXFLAGS = -O2 -m32 -std=c++11 -fpermissive $(INC) -D_WIN32_WINNT=0x0600 -msse -msse2 -w
 LDFLAGS = -static-libgcc -static-libstdc++ -shared -m32 -Wl,--kill-at
 LIBS = -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 

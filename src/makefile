@@ -1,9 +1,15 @@
-# Makefile de Supervivencia para chepeC4
-CXX = g++
-CC = gcc
+# ======================================
+# Makefile estable para VST antiguo (SSE)
+# ======================================
+
+CXX     = g++
+CC      = gcc
 WINDRES = windres
 
-# Rutas validadas
+# --------------------------------------
+# Includes
+# IMPORTANTE: apuntar al PADRE de kali/
+# --------------------------------------
 INC = -I. \
       -I../libraries \
       -I../libraries/win \
@@ -12,24 +18,43 @@ INC = -I. \
       -I../libraries/vst/pluginterfaces/vst2.x \
       -I../libraries/sp
 
-# FLAGS CLAVE:
-# -fpermissive: Ignora errores de estilo antiguo
-# -msse -msse2 -msse3: Activa las instrucciones de audio que fallan
-# -Dmm4=sp::m4f: Arregla el error de 'mm4 was not declared'
-CXXFLAGS = -O2 -m32 -std=c++11 -fpermissive $(INC) \
-           -D_WIN32_WINNT=0x0600 -msse -msse2 -msse3 \
-           -Dmm4="sp::m4f" -w
+# --------------------------------------
+# Flags de compilación
+# - gnu++03: CLAVE para código viejo
+# - sse/sse2: lo que realmente usa el DSP
+# --------------------------------------
+CXXFLAGS = -O2 -m32 -std=gnu++03 -fpermissive $(INC) \
+           -D_WIN32_WINNT=0x0600 \
+           -DWIN32 -D_WINDOWS \
+           -msse -msse2 \
+           -w
 
-LDFLAGS = -static-libgcc -static-libstdc++ -shared -m32 -Wl,--kill-at
+# --------------------------------------
+# Linker
+# --------------------------------------
+LDFLAGS = -shared -m32 \
+          -static-libgcc -static-libstdc++ \
+          -Wl,--kill-at
+
 LIBS = -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
-OBJS = vstsdk-wrapper.o sp.o main.res
+# --------------------------------------
+# Archivos
+# --------------------------------------
+OBJS   = vstsdk-wrapper.o sp.o main.res
+TARGET = LogicAnalyzer.dll
 
-all: LogicAnalyzer.dll
+# --------------------------------------
+# Build
+# --------------------------------------
+all: $(TARGET)
 
-LogicAnalyzer.dll: $(OBJS)
+$(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
+# --------------------------------------
+# Objetos
+# --------------------------------------
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -38,3 +63,16 @@ sp.o: sp.cpp
 
 main.res: main.rc
 	$(WINDRES) $< -O coff -o $@
+
+# --------------------------------------
+# Debug (útil en GitHub Actions)
+# --------------------------------------
+debug:
+	@echo "==== libraries tree ===="
+	ls -R ../libraries
+
+# --------------------------------------
+# Clean
+# --------------------------------------
+clean:
+	rm -f *.o *.res *.dll

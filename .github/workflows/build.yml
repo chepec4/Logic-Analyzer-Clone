@@ -20,11 +20,11 @@ jobs:
         install: mingw-w64-i686-toolchain make
         path-type: inherit
 
-    - name: Compile Plugin
+   - name: Compile Plugin
       shell: msys2 {0}
       run: |
         cd src
-        # El comando estándar en este entorno es 'make'
+        make debug  # Esto nos listara todo en el log si falla
         make -f makefile
 
     - name: List Files (Debug)

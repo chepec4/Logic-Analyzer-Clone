@@ -1,30 +1,51 @@
-# Makefile Final chepeC4 - Rutas Verificadas
-CXX = g++
-CC = gcc
+# ================================
+# Toolchain
+# ================================
+CXX     = g++
+CC      = gcc
 WINDRES = windres
 
-# Rutas exactas basadas en tus capturas de pantalla
+# ================================
+# Paths (IMPORTANTE)
+# Apuntamos al PADRE de "kali/"
+# ================================
 INC = -I. \
       -I../libraries \
-      -I../libraries/kali \
-      -I../libraries/win/kali \
+      -I../libraries/win \
       -I../libraries/vst \
-      -I../libraries/sp
+      -I../libraries/vst/public.sdk/source/vst2.x
 
-# Opciones de compilacion para 32 bits
-CXXFLAGS = -O2 -m32 -fpermissive $(INC) -D_WIN32_WINNT=0x0600 -w
-LDFLAGS = -static-libgcc -static-libstdc++ -shared -m32 -Wl,--kill-at
+# ================================
+# Flags de compilación (32-bit VST)
+# ================================
+CXXFLAGS = -O2 -m32 -fpermissive $(INC) \
+           -D_WIN32_WINNT=0x0600 \
+           -DWIN32 -D_WINDOWS \
+           -w
+
+LDFLAGS = -shared -m32 \
+          -static-libgcc -static-libstdc++ \
+          -Wl,--kill-at
+
 LIBS = -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
-# Objetos necesarios
+# ================================
+# Files
+# ================================
 OBJS = vstsdk-wrapper.o sp.o main.res
+TARGET = LogicAnalyzer.dll
 
-all: LogicAnalyzer.dll
+# ================================
+# Build
+# ================================
+all: $(TARGET)
 
-LogicAnalyzer.dll: $(OBJS)
+$(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
-# Compilacion de archivos fuente
+# ================================
+# Objects
+# ================================
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -34,5 +55,15 @@ sp.o: sp.cpp
 main.res: main.rc
 	$(WINDRES) $< -O coff -o $@
 
+# ================================
+# Debug (para GitHub Actions)
+# ================================
+debug:
+	@echo "==== libraries tree ===="
+	ls -R ../libraries
+
+# ================================
+# Clean
+# ================================
 clean:
 	rm -f *.o *.res *.dll

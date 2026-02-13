@@ -1,17 +1,21 @@
-# Makefile optimizado para C4 - Logic Analyzer
+# Makefile Definitivo para chepeC4 - Optimizado con rutas reales
 CXX = g++
 CC = gcc
 WINDRES = windres
 
-# Rutas de librerias y headers (basado en tu estructura de carpetas)
-INC = -I. -I../libraries -I../libraries/kali -I../libraries/vstsdk2.4
+# Rutas exactas segun tus capturas de pantalla
+INC = -I. \
+      -I../libraries \
+      -I../libraries/kali \
+      -I../libraries/win/kali \
+      -I../libraries/win \
+      -I../libraries/vst
 
-# Opciones de compilacion para 32 bits
-CXXFLAGS = -O2 -m32 -fpermissive $(INC) -D_WIN32_WINNT=0x0600
+# Flags de compilacion
+CXXFLAGS = -O2 -m32 -fpermissive $(INC) -D_WIN32_WINNT=0x0600 -w
 LDFLAGS = -static-libgcc -static-libstdc++ -shared -m32 -Wl,--kill-at
 LIBS = -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
-# Archivos a compilar (basado en tus fotos de la carpeta src)
 OBJS = vstsdk-wrapper.o sp.o main.res
 
 all: LogicAnalyzer.dll

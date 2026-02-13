@@ -12,20 +12,23 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # CAMBIO IMPORTANTE: Usamos "brechtsanders", que es más estable y no tiene el bug.
-    - name: Set up MinGW
-      uses: brechtsanders/setup-mingw@v1
+    # USAMOS LA OPCIÓN OFICIAL BLINDADA (MSYS2)
+    - name: Set up MinGW 32-bit
+      uses: msys2/setup-msys2@v2
       with:
-        platform: x86 # Mantenemos 32 bits para compatibilidad
+        msystem: MINGW32
+        install: mingw-w64-i686-toolchain make
+        path-type: inherit
 
     - name: Compile Plugin
+      shell: msys2 {0}
       run: |
         cd src
-        # Este comando compila usando el makefile que subiste
-        mingw32-make -f makefile
+        # El comando estándar en este entorno es 'make'
+        make -f makefile
 
-    - name: Verify DLL (Debug)
-      # Esto nos mostrará si se creó el archivo, aunque falle la subida
+    - name: List Files (Debug)
+      shell: cmd
       run: dir src\*.dll /s
       continue-on-error: true
 

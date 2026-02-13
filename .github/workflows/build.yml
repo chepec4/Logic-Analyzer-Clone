@@ -12,15 +12,22 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    # CAMBIO IMPORTANTE: Usamos "brechtsanders", que es más estable y no tiene el bug.
     - name: Set up MinGW
-      uses: egor-tensin/setup-mingw@v2
+      uses: brechtsanders/setup-mingw@v1
       with:
-        platform: x86
+        platform: x86 # Mantenemos 32 bits para compatibilidad
 
     - name: Compile Plugin
       run: |
         cd src
+        # Este comando compila usando el makefile que subiste
         mingw32-make -f makefile
+
+    - name: Verify DLL (Debug)
+      # Esto nos mostrará si se creó el archivo, aunque falle la subida
+      run: dir src\*.dll /s
+      continue-on-error: true
 
     - name: Upload DLL
       uses: actions/upload-artifact@v4

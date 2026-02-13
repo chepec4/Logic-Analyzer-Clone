@@ -12,7 +12,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # USAMOS LA OPCIÓN OFICIAL BLINDADA (MSYS2)
     - name: Set up MinGW 32-bit
       uses: msys2/setup-msys2@v2
       with:
@@ -24,7 +23,6 @@ jobs:
       shell: msys2 {0}
       run: |
         cd src
-        make debug
         make -f makefile
 
     - name: List Files (Debug)

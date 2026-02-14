@@ -1,6 +1,6 @@
 CXX      := g++
-# Añadimos -msse y -msse2 para que entienda las librerías de audio sp
-CXXFLAGS := -O2 -m32 -msse -msse2 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
+# Añadimos -fpermissive y quitamos advertencias estrictas para pasar las librerías kali
+CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
             -I../libraries \

@@ -1,11 +1,10 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Analisis de Ingenieria: Validado para GCC 15 / C++98 Strict
+# Validacion: GCC 15 Legacy Patching - Fase Final
 # =============================================================================
 
 CXX      := g++
-# Banderas optimizadas. Se mantiene -fpermissive para compatibilidad legacy
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
             -DNAME="\"C4 Analyzer\"" \
@@ -20,7 +19,6 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x \
             -I../libraries/sp
 
-# Librerias del sistema (Linker flags)
 LIBS     := -static-libgcc -static-libstdc++ \
             -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm -lole32 -lshlwapi
 
@@ -33,41 +31,46 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries $(TARGET)
 
 # =============================================================================
-# ZONA DE REPARACION QUIRURGICA DE LIBRERIAS (KALI & SP)
+# ZONA DE REPARACION INTEGRAL DE LIBRERIAS (KALI / SP / WIDGETS)
 # =============================================================================
 fix-libraries:
-	@echo "--- [FASE 1] Reparando errores de sintaxis basica ---"
-	# 1. Kali App: Struct HINSTANCE faltante
+	@echo "--- [FASE 1] Reparando sintaxis basica ---"
+	# 1. Kali App: Struct HINSTANCE
 	-sed -i 's/typedef HINSTANCE__ Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
-	# 2. Kali Runtime: Aritmetica de punteros void*
+	# 2. Kali Runtime: Aritmetica void*
 	-sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
-	# 3. Kali Window: Ambiguedad de String printf
+	# 3. Kali Window: String printf
 	-sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
-	# 4. Kali DbgUtils: Macro DBG ilegal
+	# 4. Kali DbgUtils: Macro DBG
 	-sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
-	# 5. SP Coefficients: Falta typename en templates
+	# 5. SP Coefficients: Typename en template
 	-sed -i 's/typedef T::Type V;/typedef typename T::Type V;/g' ../libraries/sp/coefficients.h
 
-	@echo "--- [FASE 2] Reparando error critico de Templates en Runtime.h ---"
-	# A. Inyectar estructura de ayuda I2T (Int2Type) para sobrecarga
+	@echo "--- [FASE 2] Reparando Widgets (El error actual) ---"
+	# 6. Kali Native Widgets: Falta typename en typedef T::Type
+	# Esta linea arregla el error en widgets.h:1086
+	-sed -i 's/typedef T::Type Widget;/typedef typename T::Type Widget;/g' ../libraries/win/kali/ui/native/widgets.h
+
+	@echo "--- [FASE 3] Reparando Templates en Runtime.h ---"
+	# A. Estructura de ayuda I2T
 	-sed -i '/namespace kali {/a template<int N> struct I2T { enum { v = N }; };' ../libraries/kali/runtime.h
-	# B. Cambiar firma de funcion recursiva para usar I2T
+	# B. Firma funcion recursiva
 	-sed -i 's/template <int i> static void _(int)/template <int i> static void _(I2T<i>)/g' ../libraries/kali/runtime.h
-	# C. Actualizar llamada recursiva (Paso de testigo)
+	# C. Llamada recursiva
 	-sed -i 's/ _<i+1>(0);/ _<i+1>(I2T<i+1>());/g' ../libraries/kali/runtime.h
-	# D. REPARACION CLAVE: Convertir especializacion ilegal en sobrecarga valida
+	# D. Especializacion -> Sobrecarga
 	-sed -i 's/template <> static void _ <Size> (int) {}/static void _(I2T<Size>) {}/g' ../libraries/kali/runtime.h
 	
-	@echo "--- Librerias validadas y listas ---"
+	@echo "--- Todas las librerias han sido parcheadas ---"
 
 # =============================================================================
 # COMPILACION
 # =============================================================================
 
 $(TARGET): $(OBJS)
-	@echo "--- Enlazando Plugin Final ---"
+	@echo "--- ENLAZANDO DLL FINAL ---"
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols -Wl,--kill-at -Wl,--defsym=main=VSTPluginMain
-	@echo "--- EXITO: C4 Analyzer generado correctamente ---"
+	@echo "--- EXITO TOTAL: C4 Analyzer Compilado ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

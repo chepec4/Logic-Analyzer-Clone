@@ -1,38 +1,32 @@
-# =========================
-# Configuración general
-# =========================
-
+# Makefile Profesional para LogicAnalyzer.dll
 CXX      := g++
-CXXFLAGS := -O2 -std=gnu++03 -Wall -Wextra -fpermissive
-DEFS     := -DWIN32 -D_WINDOWS
-INCLUDES := \
-	-I. \
-	-I../libraries \
-	-I../libraries/win \
-	-I../libraries/vst \
-	-I../libraries/vst/public.sdk/source/vst2.x \
-	-I../libraries/vst/pluginterfaces/vst2.x \
-	-I../libraries/sp
+CXXFLAGS := -O2 -m32 -std=gnu++03 -fpermissive -w
+# Rutas de inclusión validadas según tus librerías
+INC      := -I. -I../libraries -I../libraries/win -I../libraries/vst \
+            -I../libraries/vst/public.sdk/source/vst2.x \
+            -I../libraries/vst/pluginterfaces/vst2.x -I../libraries/sp
 
-# =========================
-# Archivos
-# =========================
+# Flags de enlace para generar un DLL VST
+LDFLAGS  := -shared -static-libgcc -static-libstdc++ -m32 -Wl,--kill-at
+LIBS     := -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
-SRC := sp.cpp
-OBJ := $(SRC:.cpp=.o)
-BIN := sp_test.exe
+# Objetos necesarios para el Spectrum Analyzer
+OBJS     := vstsdk-wrapper.o sp.o main.res
 
-# =========================
-# Reglas
-# =========================
+all: LogicAnalyzer.dll
 
-all: $(BIN)
+LogicAnalyzer.dll: $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
-$(BIN): $(OBJ)
-	$(CXX) $(OBJ) -o $@
+# Compilación del Wrapper que incluye audioeffect.cpp
+vstsdk-wrapper.o: vstsdk-wrapper.cpp
+	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) $(DEFS) $(INCLUDES) -c $< -o $@
+sp.o: sp.cpp
+	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
+
+main.res: main.rc
+	windres $< -O coff -o $@
 
 clean:
-	rm -f $(OBJ) $(BIN)
+	rm -f *.o *.res *.dll

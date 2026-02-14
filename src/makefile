@@ -1,11 +1,11 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V17.0 "Syntax Balancer" - Correccion de parentesis duplicados
+# Version: V18.0 "Search & Destroy" - Eliminacion total de codigo legacy invalido
 # =============================================================================
 
 CXX      := g++
-# Template depth alto y flags permisivos
+# Flags: Mantenemos depth alto por seguridad, pero la correccion logica es lo vital
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -47,16 +47,30 @@ fix-libraries:
 	-grep -q "typedef typename T::Type Widget;" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/typedef.*T::Type.*Widget;/typedef typename T::Type Widget;/g' ../libraries/win/kali/ui/native/widgets.h
 	-grep -q "typename Widget::Handle handle" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/Widget::Handle.*handle/typename Widget::Handle handle/g' ../libraries/win/kali/ui/native/widgets.h
 
-	@echo "--- [FASE 3] CORRECCION DE PARENTESIS (Error Actual) ---"
-	# Detectamos el error ", (sizeof" y lo cambiamos a ", sizeof" para equilibrar parentesis
-	-sed -i 's/, (sizeof/, sizeof/g' ../libraries/kali/runtime.h
-	# Detectamos el error ", (offset" y lo cambiamos a ", offset"
-	-sed -i 's/, (offset/, offset/g' ../libraries/kali/runtime.h
-	
-	# Aseguramos que la estructura I2T exista
+	@echo "--- [FASE 3] CIRUGIA RUNTIME.H (El Fix Definitivo) ---"
+	# 1. Inyectar struct I2T
 	-grep -q "struct I2T" ../libraries/kali/runtime.h || sed -i '/namespace kali {/a template<int N> struct I2T { enum { v = N }; };' ../libraries/kali/runtime.h
 	
-	# Aseguramos que el array aux sea puntero correcto
+	# 2. Arreglar DEFINICION de la funcion recursiva
+	-sed -i 's/template.*<E.*I>.*void.*_(int.*offset)/template <int I> inline_ static void _(I2T<I>, int offset)/g' ../libraries/kali/runtime.h
+	-sed -i 's/template <E I>/template <int I>/g' ../libraries/kali/runtime.h
+	
+	# 3. Arreglar LLAMADA recursiva
+	-sed -i 's/_<E(I.*+.*1)>.*(offset)/_(I2T<I + 1>(), offset)/g' ../libraries/kali/runtime.h
+	
+	# 4. Arreglar LLAMADA INICIAL y CORRUPCION previa (Eliminar parentesis extra si existen)
+	-sed -i 's/_(I2T<0>(), (sizeof/_(I2T<0>(), sizeof/g' ../libraries/kali/runtime.h
+	-sed -i 's/_<E(0)>.*(/_(I2T<0>(), /g' ../libraries/kali/runtime.h
+	
+	# 5. ELIMINAR EL CODIGO INVALIDO (Search & Destroy)
+	# Borramos cualquier linea que tenga "template <>" y "static void _" al mismo tiempo
+	-sed -i '/template.*<>.*static.*void.*_/d' ../libraries/kali/runtime.h
+	
+	# 6. INSERTAR EL CASO BASE CORRECTO
+	# Lo insertamos justo antes de cerrar la clase, buscando el array 'aux' que sabemos que esta al final
+	-grep -q "static void _(I2T<N>, int)" ../libraries/kali/runtime.h || sed -i '/static.*char.*aux/a \ \ \ \ static void _(I2T<N>, int) {}' ../libraries/kali/runtime.h
+
+	# 7. Arreglar ARRAY CHAR
 	-sed -i 's/static char aux\[\] = FUNCSIG_;/static const char* aux = FUNCSIG_;/g' ../libraries/kali/runtime.h
 	-grep -q "// aux\[sizeof" ../libraries/kali/runtime.h || sed -i 's/aux\[sizeof/ \/\/ aux[sizeof/g' ../libraries/kali/runtime.h
 
@@ -70,7 +84,6 @@ fix-libraries:
 	@echo "--- [FASE 6] App Details (Namespaces & Templates) ---"
 	-grep -q "typedef typename T::" ../libraries/win/kali/app.details.h || sed -i 's/typedef.*T::/typedef typename T::/g' ../libraries/win/kali/app.details.h
 	-sed -i 's/Loaded<T>>/Loaded<T> >/g' ../libraries/win/kali/app.details.h
-	# Fix namespaces completos
 	-grep -q "kali::ui::native::widget::Base::thunk_" ../libraries/win/kali/app.details.h || sed -i 's/widget::Base::thunk_/kali::ui::native::widget::Base::thunk_/g' ../libraries/win/kali/app.details.h
 	-grep -q "kali::ui::native::widget::Base::drawThunk_" ../libraries/win/kali/app.details.h || sed -i 's/widget::Base::drawThunk_/kali::ui::native::widget::Base::drawThunk_/g' ../libraries/win/kali/app.details.h
 

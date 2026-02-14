@@ -30,7 +30,7 @@ private:
     void  setParameter(VstInt32, float v) {doom = v;}
     bool  canParameterBeAutomated(VstInt32) {return false;}
     
-    // Usamos memcpy en lugar de la macro copy
+    // Reemplazamos copy por memcpy
     void  getParameterName(VstInt32, char* v) { memcpy(v, "None", 5); }
     void  getParameterDisplay(VstInt32 index, char* text) { sprintf(text, "%d", 0); } 
     void  getParameterLabel(VstInt32, char* text) { memcpy(text, "", 1); }
@@ -68,9 +68,12 @@ public:
         this->programsAreChunks();
         this->count = nPresets;
         this->index = 0;
+        
         for (int i = 0; i < nPresets; i++) {
-            sprintf(this->name[i], "Program %d", i + 1);
-            for(int j=0; j<nParameters; ++j) this->value[i][j] = defaults(j);
+            // CORRECCIÓN VITAL: 
+            // defaults() devuelve el nombre y llena el array (2 argumentos)
+            const char* progName = defaults(i, this->value[i]);
+            memcpy(this->name[i], progName, sizeof(*this->name));
         }
     }
 };

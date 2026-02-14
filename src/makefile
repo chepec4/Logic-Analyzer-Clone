@@ -1,13 +1,11 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Nivel: V7.0 "Cross-Platform" - Solucion __FUNCSIG__
+# Nivel: V8.0 "Pointer Fix" - Solucion char[] vs const char*
 # =============================================================================
 
 CXX      := g++
-# Flags ajustados:
-# -Wno-narrowing: Evita errores float->int.
-# -Wno-write-strings: Compatibilidad con cadenas legacy.
+# Flags optimizados para compatibilidad
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -35,7 +33,7 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries $(TARGET)
 
 # =============================================================================
-# ZONA DE REPARACION (Fases 1-5 Validadas + Fase 6 Nueva)
+# ZONA DE REPARACION (Fases 1-6 Validadas + Fase 7 Nueva)
 # =============================================================================
 fix-libraries:
 	@echo "--- [FASE 1] Reparaciones Estructurales ---"
@@ -63,9 +61,13 @@ fix-libraries:
 	-grep -q "typedef typename T::" ../libraries/win/kali/app.details.h || sed -i 's/typedef T::/typedef typename T::/g' ../libraries/win/kali/app.details.h
 	-sed -i 's/Loaded<T>>/Loaded<T> >/g' ../libraries/win/kali/app.details.h
 
-	@echo "--- [FASE 6] COMPATIBILIDAD PLATAFORMA (EL NUEVO FIX) ---"
-	# Reemplazamos __FUNCSIG__ (Microsoft) por __PRETTY_FUNCTION__ (GCC)
+	@echo "--- [FASE 6] COMPATIBILIDAD PLATAFORMA ---"
 	-grep -q "__PRETTY_FUNCTION__" ../libraries/win/kali/platform.h || sed -i 's/__FUNCSIG__/__PRETTY_FUNCTION__/g' ../libraries/win/kali/platform.h
+
+	@echo "--- [FASE 7] ARREGLO FINAL RUNTIME (Array vs Pointer) ---"
+	# GCC no permite inicializar char[] con una variable (PRETTY_FUNCTION).
+	# Cambiamos 'static char aux[]' por 'static const char* aux'.
+	-grep -q "static const char\* aux =" ../libraries/kali/runtime.h || sed -i 's/static char aux\[\] = FUNCSIG_;/static const char* aux = FUNCSIG_;/g' ../libraries/kali/runtime.h
 
 	@echo "--- Codigo Completamente Reparado. Compilando... ---"
 

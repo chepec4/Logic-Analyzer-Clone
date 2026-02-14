@@ -3,6 +3,7 @@
 
 #include "vst.h"
 #include <stdio.h>
+#include <string.h> // Para memcpy
 
 template <int nPresets, int nParameters>
 struct PresetBank
@@ -29,9 +30,10 @@ private:
     void  setParameter(VstInt32, float v) {doom = v;}
     bool  canParameterBeAutomated(VstInt32) {return false;}
     
-    void  getParameterName(VstInt32, char* v) { copy(v, "None", 5); }
+    // Usamos memcpy en lugar de la macro copy
+    void  getParameterName(VstInt32, char* v) { memcpy(v, "None", 5); }
     void  getParameterDisplay(VstInt32 index, char* text) { sprintf(text, "%d", 0); } 
-    void  getParameterLabel(VstInt32, char* text) { copy(text, "", 1); }
+    void  getParameterLabel(VstInt32, char* text) { memcpy(text, "", 1); }
 
     typedef vst::PluginBase <Plugin>            Base;
     typedef PresetBank <nPresets, nParameters> Bank;
@@ -44,15 +46,15 @@ private:
     }
 
     void setProgramName(char* text) {
-        copy(this->name[this->index], text, kVstMaxProgNameLen);
+        memcpy(this->name[this->index], text, kVstMaxProgNameLen);
     }
 
     void getProgramName(char* text) {
-        copy(text, this->name[this->index], kVstMaxProgNameLen);
+        memcpy(text, this->name[this->index], kVstMaxProgNameLen);
     }
 
     bool getProgramNameIndexed(VstInt32, VstInt32 i, char* text) {
-        return (i < PresetCount) ? !!copy(text, this->name[i], kVstMaxProgNameLen) : false;
+        return (i < PresetCount) ? !!memcpy(text, this->name[i], kVstMaxProgNameLen) : false;
     }
 
     VstInt32 getChunk(void** data, bool isPreset) { return 0; }
@@ -66,9 +68,9 @@ public:
         this->programsAreChunks();
         this->count = nPresets;
         this->index = 0;
-        // Esta es la línea corregida que coincide con el original
         for (int i = 0; i < nPresets; i++) {
-            copy(this->name[i], defaults(i, this->value[i]), sizeof(*this->name));
+            sprintf(this->name[i], "Program %d", i + 1);
+            for(int j=0; j<nParameters; ++j) this->value[i][j] = defaults(j);
         }
     }
 };

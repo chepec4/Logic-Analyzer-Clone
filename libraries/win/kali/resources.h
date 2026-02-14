@@ -1,13 +1,13 @@
-
 #ifndef KALI_RESOURCES_INCLUDED
 #define KALI_RESOURCES_INCLUDED
 
 #include <windows.h>
+#include <objidl.h> // REQUIRED FOR IStream
 #include "kali/dbgutils.h"
 
 // ............................................................................
 
-namespace kali     {
+namespace kali      {
 namespace resource {
 
 // ............................................................................
@@ -15,7 +15,7 @@ namespace resource {
 template <typename T, bool Editable = true>
 struct Raw
 {
-    T*  data() const {return data_;}
+    T* data() const {return data_;}
     int size() const {return size_;}
 
     Raw(const char* type, const char* id,
@@ -47,7 +47,7 @@ struct Raw
     }
 
 private:
-    T*      data_;
+    T* data_;
     int     size_;
     HGLOBAL handle;
 
@@ -93,7 +93,7 @@ private:
 };
 
 // ............................................................................
-
+// ... resto del archivo igual ...
 #ifdef GDIPVER
 
 struct ImageBits
@@ -167,7 +167,7 @@ private:
 
 private:
     struct Initializer {Initializer() {app->initGraphics();}};
-    Initializer         initializer_; // need to init gdi+ first
+    Initializer          initializer_; // need to init gdi+ first
     Gdiplus::BitmapData bits;
     Gdiplus::Bitmap     image;
     Size                size_;

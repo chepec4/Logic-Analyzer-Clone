@@ -1,10 +1,10 @@
 # =============================================================================
-# MAKEFILE FINAL - C4 ANALYZER (Estrategia Limpia)
+# MAKEFILE DE RESCATE (Regreso a la configuración 32-bit que funcionaba)
 # =============================================================================
 
 CXX      := g++
-# Flags críticas: -fpermissive para ignorar errores de tipos en kali
-CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
+# Usamos gnu++98 para máxima compatibilidad con el código viejo (Kali)
+CXXFLAGS := -O2 -m32 -std=gnu++98 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
             -I../libraries \
@@ -14,17 +14,23 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x \
             -I../libraries/sp
 
-LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm -lole32 -lshlwapi
+LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
 OBJS     := vstsdk-wrapper.o sp.o main.res
 
-# REGLA DE PARCHEO MANUAL (Solo analyzer.h necesita esto)
-all: patch-analyzer C4Analyzer.dll
+# Objetivo con parches previos
+all: patch-window fix-analyzer C4Analyzer.dll
 
-patch-analyzer:
-	@echo "--- Parchando analyzer.h ---"
-	-sed -i 's/Dst::T/typename Dst::T/g' analyzer.h
-	@echo "--- Analyzer parchado ---"
+# PARCHE 1: Soluciona el error de "ambiguous call to String" en window.h
+# Forzamos el constructor String("%s", text) para que no haya duda
+patch-window:
+	@echo "--- Arreglando window.h ---"
+	-sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h || true
+
+# PARCHE 2: Agrega typename faltante en analyzer.h (requerido por GCC moderno)
+fix-analyzer:
+	@echo "--- Arreglando analyzer.h ---"
+	-sed -i 's/Dst::T/typename Dst::T/g' analyzer.h || true
 
 C4Analyzer.dll: $(OBJS)
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols -Wl,--kill-at

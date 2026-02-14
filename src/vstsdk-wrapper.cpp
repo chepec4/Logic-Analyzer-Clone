@@ -7,12 +7,10 @@
 #pragma warning(pop)
 
 extern "C" {
+    // Solo exportamos VSTPluginMain
     __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {
         Plugin* effect = new Plugin(master);
         if (!effect) return 0;
         return effect->getAeffect();
-    }
-    __declspec(dllexport) AEffect* main(audioMasterCallback master) {
-        return VSTPluginMain(master);
     }
 }

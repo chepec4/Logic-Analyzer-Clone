@@ -1,3 +1,4 @@
+#include "main.h" // ¡FUNDAMENTAL! Aquí es donde vive la clase Plugin
 #include "includes.h"
 
 // Forzamos la inclusión del código fuente del SDK de Steinberg
@@ -8,19 +9,19 @@
 
 // ----------------------------------------------------------------------------
 // LA PUERTA DE ENTRADA (VST EXPORT)
-// Esto es lo que Ableton y FL Studio buscan para reconocer el plugin.
 // ----------------------------------------------------------------------------
 extern "C" {
-    // __declspec(dllexport) hace que la función sea visible fuera del DLL
+    // Esta es la función que los DAWs de 64 bits buscan primero
     __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {
-        // Creamos una instancia de tu clase Plugin definida en main.h
+        // Ahora el compilador ya sabe qué es 'Plugin' gracias a main.h
         Plugin* effect = new Plugin(master);
         if (!effect) return 0;
         return effect->getAeffect();
     }
     
-    // Versión antigua por compatibilidad
-    __declspec(dllexport) AEffect* main(audioMasterCallback master) {
+    // Cambiamos el nombre para evitar el error 'main must return int'
+    // Los DAWs modernos ya usan VSTPluginMain, así que esto es por legacy.
+    __declspec(dllexport) AEffect* VSTMain(audioMasterCallback master) {
         return VSTPluginMain(master);
     }
 }

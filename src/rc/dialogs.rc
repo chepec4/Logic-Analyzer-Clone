@@ -1,24 +1,21 @@
 // ============================================================================
-// DIALOGS.RC (Español - C4 Analyzer)
+// DIALOGS.RC (Español - C4 Analyzer - CORREGIDO)
 // ============================================================================
 #include <windows.h>
 #include <commctrl.h> 
 
-// Ruta relativa correcta para MinGW
+// Ruta relativa correcta
 #include "../resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
-//
 // Generated from the TEXTINCLUDE 2 resource.
-//
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
 // Spanish (Costa Rica) resources
-// (Mantenemos la definición técnica en inglés para compatibilidad, 
-// pero el texto visible será español)
+// NOTA: Hemos cambiado IDC_STATIC por -1 para evitar errores de compilacion.
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
 #ifdef _WIN32
@@ -36,12 +33,12 @@ STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VISIBLE
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
 BEGIN
-    // Selectores (Comboboxes)
+    // Selectores
     COMBOBOX        0,64,8,48,84,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     COMBOBOX        17,64,24,48,84,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     COMBOBOX        16,158,8,48,84,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     
-    // Controles Numéricos (Edit + UpDown)
+    // Controles Numéricos
     EDITTEXT        13,64,56,48,12,ES_AUTOHSCROLL
     CONTROL         "",113,"msctls_updown32",UDS_WRAP | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS,100,57,11,10
     EDITTEXT        14,64,72,48,12,ES_AUTOHSCROLL
@@ -51,7 +48,7 @@ BEGIN
     EDITTEXT        2,64,104,48,12,ES_AUTOHSCROLL
     CONTROL         "",102,"msctls_updown32",UDS_WRAP | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS,100,105,11,10
     
-    // Botones Checkbox (Traducidos)
+    // Checkboxes
     CONTROL         "Activar",1,"Button",BS_AUTOCHECKBOX | BS_RIGHT | WS_TABSTOP,161,105,44,10,WS_EX_RIGHT
     
     EDITTEXT        9,64,136,48,12,ES_AUTOHSCROLL
@@ -76,13 +73,13 @@ BEGIN
     EDITTEXT        6,158,232,48,12,ES_AUTOHSCROLL
     CONTROL         "",106,"msctls_updown32",UDS_WRAP | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS,194,233,11,10
     
-    // Líneas Divisorias
+    // Decoración
     CONTROL         "",43,"Static",SS_ETCHEDHORZ,7,46,200,1,WS_EX_STATICEDGE
     CONTROL         "",45,"Static",SS_ETCHEDHORZ,7,94,200,1,WS_EX_STATICEDGE
     CONTROL         "",44,"Static",SS_ETCHEDHORZ,7,126,200,1,WS_EX_STATICEDGE
     CONTROL         "",46,"Static",SS_ETCHEDHORZ,7,190,200,1,WS_EX_STATICEDGE
     
-    // TEXTOS TRADUCIDOS (Aquí está la magia)
+    // TEXTOS (Etiquetas) - Aquí cambiamos IDC_STATIC por -1
     LTEXT           "Canal:",200,7,10,49,8
     LTEXT           "Bandas/Oct:",217,7,26,49,8
     LTEXT           "Rejilla Frec:",216,119,10,36,8
@@ -94,14 +91,18 @@ BEGIN
     LTEXT           "Caída:",210,14,154,49,8
     LTEXT           "Tamaño:",212,123,170,32,8
     LTEXT           "Ver Como:",211,14,170,49,8
-    LTEXT           "Nivel",IDC_STATIC,7,42,20,8
-    LTEXT           "Pico",IDC_STATIC,7,90,18,8
-    LTEXT           "Mantener Pico",IDC_STATIC,7,122,50,8
+    
+    // ESTAS SON LAS LINEAS QUE DABAN ERROR:
+    LTEXT           "Nivel",-1,7,42,20,8
+    LTEXT           "Pico",-1,7,90,18,8
+    LTEXT           "Mantener Pico",-1,7,122,50,8
+    
     LTEXT           "Tiempo:",204,14,202,49,8
     LTEXT           "Tamaño:",206,123,234,32,8
     LTEXT           "Ver Como:",205,14,234,49,8
     LTEXT           "Pendiente:",218,14,218,49,8
-    LTEXT           "Promedio",IDC_STATIC,7,186,30,8
+    
+    LTEXT           "Promedio",-1,7,186,30,8
 END
 
 COLORS DIALOGEX 0, 0, 218, 240
@@ -109,7 +110,7 @@ STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VISIBLE
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
 BEGIN
-    LTEXT           "Esquema de Color:",IDC_STATIC,7,10,60,8
+    LTEXT           "Esquema de Color:",-1,7,10,60,8
     COMBOBOX        400,57,8,111,84,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
     CONTROL         "",42,"Static",SS_ETCHEDHORZ,7,28,200,1,WS_EX_STATICEDGE
     
@@ -162,7 +163,7 @@ FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
 BEGIN
 END
 
-// BITMAPS (Comentados por seguridad)
+// BITMAPS
 // TOOLBAR-ON              BITMAP                  "toolbar-on.bmp"
 // TOOLBAR-OFF             BITMAP                  "toolbar-off.bmp"
 

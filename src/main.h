@@ -18,6 +18,11 @@
 #define PERF 0
 #define PROCESS_DBL 1
 
+// Parche de compatibilidad para MinGW / GitHub
+#include <string.h>
+#define copy(dest, src, size) memcpy(dest, src, size)
+#define hsum(x) _mm_cvtss_f32(_mm_hadd_ps(x, x))
+#define shuffle(a, b, c, d) _mm_shuffle_ps(a, b, _MM_SHUFFLE(d, c, b, a))
 // Parche para evitar errores de sintaxis antiguos
 #define tf
 
@@ -348,4 +353,5 @@ private:
 // ............................................................................
 
 #endif // ~ PLUGIN_INCLUDED
+
 

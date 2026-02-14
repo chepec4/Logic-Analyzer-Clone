@@ -1,8 +1,7 @@
-# Makefile Maestro C4 Analyzer - Versión 64-bit (x64)
+# Makefile C4 Analyzer - Versión 64-bit (x64)
 # Programador: ChepeC4
 
 CXX      := g++
-# Eliminamos -m32 para permitir 64 bits nativos
 CXXFLAGS := -O2 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
@@ -13,7 +12,6 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x \
             -I../libraries/sp
 
-# Enlace estático para que no dependa de DLLs externas de C++
 LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
 
 OBJS     := vstsdk-wrapper.o sp.o main.res

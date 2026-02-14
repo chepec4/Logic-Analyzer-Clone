@@ -1,8 +1,9 @@
-# Makefile C4 Analyzer - Versión 64-bit (x64)
+# Makefile C4 Analyzer - Versión 32-bit Estable
 # Programador: ChepeC4
 
 CXX      := g++
-CXXFLAGS := -O2 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
+# Usamos -m32 para estabilidad de las librerías matemáticas sp/kali
+CXXFLAGS := -O2 -m32 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
             -I../libraries \
@@ -19,7 +20,7 @@ OBJS     := vstsdk-wrapper.o sp.o main.res
 all: C4Analyzer.dll
 
 C4Analyzer.dll: $(OBJS)
-	$(CXX) -shared -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols
+	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols -Wl,--kill-at
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

@@ -2,56 +2,63 @@
 #define PLUGIN_INCLUDED
 
 // ============================================================================
-// 1. CORRECCIÓN DE WINDOWS (Vital para CHOOSECOLOR y IStream)
+// 1. WINDOWS & SYSTEM HEADERS
 // ============================================================================
-// Desactivamos la versión "ligera" de Windows para cargar TODO (Commdlg, OLE)
 #ifdef WIN32_LEAN_AND_MEAN
  #undef WIN32_LEAN_AND_MEAN
 #endif
-
+#define _WIN32_WINNT 0x0600
 #include <windows.h>
-#include <commdlg.h> // Para CHOOSECOLOR
-#include <ole2.h>    // Para IStream
-#include <shlwapi.h> // Para CreateStreamOnHGlobal
+#include <commdlg.h>
+#include <ole2.h>
+#include <shlwapi.h>
+#include <string.h>
+#include <stdio.h>
+#include <math.h>
 
 // ============================================================================
-// 2. PARCHES MATEMÁTICOS (SSE & Intrinsics)
+// 2. PARCHES DE MACROS CONFLICTIVAS
+// ============================================================================
+// Arreglamos el error de DBG (defined no se puede usar así)
+#ifdef _DEBUG
+ #define DBG 1
+#else
+ #define DBG 0
+#endif
+
+// Definimos V para coefficients.h
+#define V(x) (float)(x)
+
+// Eliminamos parches anteriores de 'copy' para evitar ambigüedad en kali
+// Usaremos funciones inline seguras si hace falta
+
+// ============================================================================
+// 3. PARCHES MATEMÁTICOS (SSE)
 // ============================================================================
 #include <xmmintrin.h>
 #include <emmintrin.h>
 #include <pmmintrin.h>
-#include <string.h>
-#include <stdio.h>
 
-// Definimos la macro V faltante
-#define V(x) (float)(x)
-
-// Suma horizontal
 inline float hsum(__m128 x) {
     __m128 t = _mm_add_ps(x, _mm_movehl_ps(x, x));
     __m128 r = _mm_add_ss(t, _mm_shuffle_ps(t, t, 1));
     float f; _mm_store_ss(&f, r); return f;
 }
 
-// Shuffle de 1 argumento
 template <int i0, int i1, int i2, int i3>
 inline __m128 shuffle(__m128 x) {
     return _mm_shuffle_ps(x, x, _MM_SHUFFLE(i3, i2, i1, i0));
 }
 
-// NUEVO: Shuffle de 2 argumentos (Arregla analyzer.h)
 template <int i0, int i1, int i2, int i3>
 inline __m128 shuffle(__m128 a, __m128 b) {
     return _mm_shuffle_ps(a, b, _MM_SHUFFLE(i3, i2, i1, i0));
 }
 
 // ============================================================================
-// 3. PARCHES DE IDENTIDAD
+// 4. PARCHES 'SP' Y 'ANALYZER'
 // ============================================================================
 #define tf 
-
-// ¡IMPORTANTE! Eliminamos '#define copy' porque rompe kali::runtime.h
-// Usaremos memcpy o my_copy en los archivos individuales.
 
 #ifndef NAME
  #define NAME "C4 Analyzer"
@@ -64,37 +71,45 @@ inline __m128 shuffle(__m128 a, __m128 b) {
 #endif
 
 // ============================================================================
-// 4. INCLUDES ORIGINALES
+// 5. INCLUDES DEL PLUGIN
 // ============================================================================
 #include "preset-handler.h"
 #include "sa.legacy.h"
 #include "sa.display.h"
 
 // ============================================================================
-// 5. PARCHES 'SP' (Matemáticas de Audio)
+// 6. SOBRECARGAS MATEMÁTICAS FINALES
 // ============================================================================
 namespace sp {
-    // Helper para convertir array a __m128 a la fuerza
     template <typename T>
     inline const __m128& as_m128(const T& x) {
         return *reinterpret_cast<const __m128*>(&x);
     }
     
-    // Sobrecargas para que el compilador sepa multiplicar
     inline __m128 operator*(const array<float, 4, SSE>& a, __m128 b) {
         return _mm_mul_ps(as_m128(a), b);
     }
     inline __m128 operator+(const array<float, 4, SSE>& a, __m128 b) {
         return _mm_add_ps(as_m128(a), b);
     }
-    // Sobrecarga de MAX para arreglar analyzer.h
     inline __m128 max(const array<float, 4, SSE>& a, __m128 b) {
         return _mm_max_ps(as_m128(a), b);
     }
 }
 
 // ============================================================================
-// 6. CLASE PRINCIPAL DEL PLUGIN
+// 7. ARREGLO DE AMBIGÜEDAD 'PTR' DE KALI
+// ============================================================================
+// Esto fuerza al compilador a elegir el constructor correcto
+namespace kali {
+    template <typename T>
+    struct PtrFix : Ptr<T> {
+        PtrFix(T* p) : Ptr<T>(p) {}
+    };
+}
+
+// ============================================================================
+// 8. CLASE PLUGIN
 // ============================================================================
 struct Plugin : sp::AlignedNew <16>, PresetHandler <Plugin, 9, sa::config::ParameterCount> {
     typedef PresetHandler <Plugin, 9, sa::config::ParameterCount> Base;

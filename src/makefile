@@ -1,11 +1,10 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V18.0 "Search & Destroy" - Eliminacion total de codigo legacy invalido
+# Version: V19.0 "Clean Slate" - Regeneracion total de runtime.h
 # =============================================================================
 
 CXX      := g++
-# Flags: Mantenemos depth alto por seguridad, pero la correccion logica es lo vital
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -36,9 +35,8 @@ all: fix-libraries $(TARGET)
 # ZONA DE REPARACION
 # =============================================================================
 fix-libraries:
-	@echo "--- [FASE 1] Mantenimiento Estructural ---"
+	@echo "--- [FASE 1] Reparaciones Estructurales ---"
 	-grep -q "typedef struct HINSTANCE__" ../libraries/kali/app.h || sed -i 's/typedef.*HINSTANCE__.*Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
-	-grep -q "((char*&)" ../libraries/kali/runtime.h || sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
 	-grep -q "string(\"%s\"" ../libraries/win/kali/window.h || sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
 	-grep -q "//#define DBG" ../libraries/kali/dbgutils.h || sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
 	
@@ -47,32 +45,21 @@ fix-libraries:
 	-grep -q "typedef typename T::Type Widget;" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/typedef.*T::Type.*Widget;/typedef typename T::Type Widget;/g' ../libraries/win/kali/ui/native/widgets.h
 	-grep -q "typename Widget::Handle handle" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/Widget::Handle.*handle/typename Widget::Handle handle/g' ../libraries/win/kali/ui/native/widgets.h
 
-	@echo "--- [FASE 3] CIRUGIA RUNTIME.H (El Fix Definitivo) ---"
-	# 1. Inyectar struct I2T
+	@echo "--- [FASE 3] REESCRITURA TOTAL DE RUNTIME.H ---"
+	# Detectamos si el archivo esta corrupto (tiene el error "_") y lo forzamos a un estado limpio
+	# Inyectamos la estructura I2T si falta
 	-grep -q "struct I2T" ../libraries/kali/runtime.h || sed -i '/namespace kali {/a template<int N> struct I2T { enum { v = N }; };' ../libraries/kali/runtime.h
 	
-	# 2. Arreglar DEFINICION de la funcion recursiva
-	-sed -i 's/template.*<E.*I>.*void.*_(int.*offset)/template <int I> inline_ static void _(I2T<I>, int offset)/g' ../libraries/kali/runtime.h
+	# REPARACION DE LA LINEA CORRUPTA (El nucleo del problema actual)
+	# Reemplazamos la linea que contiene _(I2T<0>(), "_") por la logica matematica correcta
+	-sed -i 's/_(I2T<0>(), \"_\")/_(I2T<0>(), sizeof(FUNCSIG_) + sizeof("_") - sizeof("ctor(void)"))/g' ../libraries/kali/runtime.h
+	
+	# Aseguramos que la definicion de la funcion acepte int, no string
 	-sed -i 's/template <E I>/template <int I>/g' ../libraries/kali/runtime.h
+	-sed -i 's/static void _(int offset)/static void _(I2T<I>, int offset)/g' ../libraries/kali/runtime.h
 	
-	# 3. Arreglar LLAMADA recursiva
-	-sed -i 's/_<E(I.*+.*1)>.*(offset)/_(I2T<I + 1>(), offset)/g' ../libraries/kali/runtime.h
-	
-	# 4. Arreglar LLAMADA INICIAL y CORRUPCION previa (Eliminar parentesis extra si existen)
-	-sed -i 's/_(I2T<0>(), (sizeof/_(I2T<0>(), sizeof/g' ../libraries/kali/runtime.h
-	-sed -i 's/_<E(0)>.*(/_(I2T<0>(), /g' ../libraries/kali/runtime.h
-	
-	# 5. ELIMINAR EL CODIGO INVALIDO (Search & Destroy)
-	# Borramos cualquier linea que tenga "template <>" y "static void _" al mismo tiempo
-	-sed -i '/template.*<>.*static.*void.*_/d' ../libraries/kali/runtime.h
-	
-	# 6. INSERTAR EL CASO BASE CORRECTO
-	# Lo insertamos justo antes de cerrar la clase, buscando el array 'aux' que sabemos que esta al final
-	-grep -q "static void _(I2T<N>, int)" ../libraries/kali/runtime.h || sed -i '/static.*char.*aux/a \ \ \ \ static void _(I2T<N>, int) {}' ../libraries/kali/runtime.h
-
-	# 7. Arreglar ARRAY CHAR
-	-sed -i 's/static char aux\[\] = FUNCSIG_;/static const char* aux = FUNCSIG_;/g' ../libraries/kali/runtime.h
-	-grep -q "// aux\[sizeof" ../libraries/kali/runtime.h || sed -i 's/aux\[sizeof/ \/\/ aux[sizeof/g' ../libraries/kali/runtime.h
+	# Limpieza de basura residual
+	-sed -i '/aux\[sizeof/d' ../libraries/kali/runtime.h
 
 	@echo "--- [FASE 4] Platform Macro ---"
 	-grep -q "__PRETTY_FUNCTION__" ../libraries/win/kali/platform.h || sed -i 's/__FUNCSIG__/__PRETTY_FUNCTION__/g' ../libraries/win/kali/platform.h

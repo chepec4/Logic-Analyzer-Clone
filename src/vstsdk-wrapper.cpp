@@ -1,3 +1,8 @@
+#include <windows.h>
+#include <commdlg.h>
+#include <objidl.h>
+#include <shlwapi.h>
+
 #include "main.h" 
 #include "includes.h"
 

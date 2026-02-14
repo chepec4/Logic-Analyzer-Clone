@@ -1,11 +1,10 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V26.0 "Cirugia Reconstructiva" - Respeta el codigo original
+# Version: V27.0 "Missing Link" - Inyeccion Quirurgica sin Duplicados
 # =============================================================================
 
 CXX      := g++
-# Flags ajustados para máxima compatibilidad
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -27,26 +26,21 @@ LIBS     := -static-libgcc -static-libstdc++ \
 OBJS     := vstsdk-wrapper.o sp.o main.res
 TARGET   := C4Analyzer.dll
 
-# =============================================================================
-# OBJETIVO PRINCIPAL
-# =============================================================================
 all: restore-original fix-libraries inject-fixes fix-def $(TARGET)
 
 # =============================================================================
-# PASO 0: RESTAURAR EL CEREBRO DEL PLUGIN
+# PASO 0: RESTAURAR ARCHIVO ORIGINAL
 # =============================================================================
 restore-original:
-	@echo "--- [0/4] Recuperando codigo original de vstsdk-wrapper.cpp ---"
-	# Borramos la version generica corrupta
+	@echo "--- [0/4] Recuperando codigo original ---"
 	rm -f vstsdk-wrapper.cpp
-	# Recuperamos la version original del repositorio
 	git checkout vstsdk-wrapper.cpp
 
 # =============================================================================
 # PASO 1: REPARACION DE LIBRERIAS (Perl Scripting)
 # =============================================================================
 fix-libraries:
-	@echo "--- [1/4] Ejecutando Reparaciones de Librerias ---"
+	@echo "--- [1/4] Reparando Runtime y Librerias ---"
 	@echo 'use strict; use warnings;' > fixer.pl
 	@echo 'my $$file = $$ARGV[0];' >> fixer.pl
 	@echo 'local $$/ = undef;' >> fixer.pl
@@ -90,22 +84,24 @@ fix-libraries:
 	perl fixer.pl ../libraries/win/kali/app.details.h
 
 # =============================================================================
-# PASO 2: INYECCION QUIRURGICA (Append al archivo original)
+# PASO 2: INYECCION SOLO DE LO FALTANTE (Sin duplicar VSTPluginMain)
 # =============================================================================
 inject-fixes:
-	@echo "--- [2/4] Inyectando DllMain y Exports al archivo ORIGINAL ---"
-	# Verificar si ya lo inyectamos antes para no duplicar
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo "" >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo '// --- INYECCION C4 ANALYZER ---' >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo '#include <windows.h>' >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo 'void* hInstance = 0;' >> vstsdk-wrapper.cpp
-	# DllMain: La llave para que la GUI funcione
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo 'extern "C" BOOL WINAPI DllMain(HINSTANCE hInst, DWORD dwReason, LPVOID lpvReserved) { if (dwReason == DLL_PROCESS_ATTACH) { hInstance = hInst; } return 1; }' >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo 'extern "C" {' >> vstsdk-wrapper.cpp
-	# VSTPluginMain: La llave para que el DAW reconozca el plugin
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo '    __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) { if (!master) return 0; Plugin* effect = new Plugin(master); if (!effect) return 0; return effect->getAeffect(); }' >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo '    __declspec(dllexport) AEffect* Main_Proxy(audioMasterCallback master) { return VSTPluginMain(master); }' >> vstsdk-wrapper.cpp
-	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo '}' >> vstsdk-wrapper.cpp
+	@echo "--- [2/4] Inyectando parches faltantes ---"
+	# 1. Asegurar includes (al inicio del archivo)
+	@grep -q "<windows.h>" vstsdk-wrapper.cpp || sed -i '1i #include <windows.h>' vstsdk-wrapper.cpp
+	
+	# 2. Agregar salto de linea al final por seguridad
+	@echo "" >> vstsdk-wrapper.cpp
+	
+	# 3. Variable Global hInstance (Solo si no existe)
+	@grep -q "void\* hInstance" vstsdk-wrapper.cpp || echo "void* hInstance = 0;" >> vstsdk-wrapper.cpp
+	
+	# 4. DllMain (Solo si no existe)
+	@grep -q "DllMain" vstsdk-wrapper.cpp || echo 'extern "C" BOOL WINAPI DllMain(HINSTANCE hInst, DWORD dwReason, LPVOID lpvReserved) { if (dwReason == DLL_PROCESS_ATTACH) { hInstance = hInst; } return 1; }' >> vstsdk-wrapper.cpp
+	
+	# 5. Main_Proxy (Para FL Studio, llama al VSTPluginMain existente)
+	@grep -q "Main_Proxy" vstsdk-wrapper.cpp || echo 'extern "C" __declspec(dllexport) AEffect* Main_Proxy(audioMasterCallback master) { return VSTPluginMain(master); }' >> vstsdk-wrapper.cpp
 
 # =============================================================================
 # PASO 3: ARCHIVO DEF
@@ -123,7 +119,7 @@ fix-def:
 $(TARGET): $(OBJS)
 	@echo "--- ENLAZANDO DLL ---"
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) C4Analyzer.def -Wl,--kill-at
-	@echo "--- EXITO: C4Analyzer.dll generado con su logica original ---"
+	@echo "--- EXITO: Plugin generado con logica original + parches ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

@@ -1,10 +1,11 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V22.0 "DEF Strategy" - Solucion definitiva al problema del Main
+# Version: V24.0 "FL Studio Fix" - Exportacion limpia para Bit-Bridge
 # =============================================================================
 
 CXX      := g++
+# Mantenemos 32-bit (-m32) ya que FL Studio lo soporta.
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -32,7 +33,7 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries fix-wrapper fix-def $(TARGET)
 
 # =============================================================================
-# PASO 1: REPARACION DE LIBRERIAS (Perl Scripting Validado)
+# PASO 1: REPARACION DE LIBRERIAS (Script Perl)
 # =============================================================================
 fix-libraries:
 	@echo "--- [1/3] Ejecutando Reparaciones de Librerias ---"
@@ -79,10 +80,10 @@ fix-libraries:
 	perl fixer.pl ../libraries/win/kali/app.details.h
 
 # =============================================================================
-# PASO 2: REESCRITURA DE WRAPPER (Sin la funcion Main conflictiva)
+# PASO 2: REESCRITURA DE WRAPPER (EL TRUCO DE FL STUDIO)
 # =============================================================================
 fix-wrapper:
-	@echo "--- [2/3] Regenerando vstsdk-wrapper.cpp (Solo VSTPluginMain) ---"
+	@echo "--- [2/3] Regenerando vstsdk-wrapper.cpp ---"
 	@echo '#define _CRT_SECURE_NO_WARNINGS' > vstsdk-wrapper.cpp
 	@echo '#include <windows.h>' >> vstsdk-wrapper.cpp
 	@echo '#include <commdlg.h>' >> vstsdk-wrapper.cpp
@@ -93,32 +94,38 @@ fix-wrapper:
 	@echo '#include "audioeffectx.cpp"' >> vstsdk-wrapper.cpp
 	@echo '' >> vstsdk-wrapper.cpp
 	@echo 'extern "C" {' >> vstsdk-wrapper.cpp
-	@echo '    // Solo definimos VSTPluginMain para evitar error de tipo en C++' >> vstsdk-wrapper.cpp
+	@echo '    // Funcion principal standard' >> vstsdk-wrapper.cpp
 	@echo '    __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
 	@echo '        if (!master) return 0;' >> vstsdk-wrapper.cpp
 	@echo '        Plugin* effect = new Plugin(master);' >> vstsdk-wrapper.cpp
 	@echo '        if (!effect) return 0;' >> vstsdk-wrapper.cpp
 	@echo '        return effect->getAeffect();' >> vstsdk-wrapper.cpp
 	@echo '    }' >> vstsdk-wrapper.cpp
+	@echo '    // PROXY PARA "main". No le llamamos "main" aqui para que C++ no llore.' >> vstsdk-wrapper.cpp
+	@echo '    // El archivo .DEF le cambiara el nombre a "main" al exportar.' >> vstsdk-wrapper.cpp
+	@echo '    __declspec(dllexport) AEffect* Main_Proxy(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
+	@echo '        return VSTPluginMain(master);' >> vstsdk-wrapper.cpp
+	@echo '    }' >> vstsdk-wrapper.cpp
 	@echo '}' >> vstsdk-wrapper.cpp
 
 # =============================================================================
-# PASO 3: CREACION DE ARCHIVO DEF (Mapeo de Main -> VSTPluginMain)
+# PASO 3: CREACION DE ARCHIVO DEF (EL RENOMBRAMIENTO MAGICO)
 # =============================================================================
 fix-def:
-	@echo "--- [3/3] Creando C4Analyzer.def para Alias de Linker ---"
+	@echo "--- [3/3] Creando C4Analyzer.def ---"
 	@echo "EXPORTS" > C4Analyzer.def
 	@echo "    VSTPluginMain" >> C4Analyzer.def
-	@echo "    main = VSTPluginMain" >> C4Analyzer.def
+	@echo "    main = Main_Proxy" >> C4Analyzer.def
 
 # =============================================================================
 # COMPILACION FINAL
 # =============================================================================
 
 $(TARGET): $(OBJS)
-	@echo "--- ENLAZANDO DLL CON DEFINITION FILE ---"
+	@echo "--- ENLAZANDO DLL (32-bit con Export Fix) ---"
+	# Usamos --kill-at para quitar los @8 y el .def para renombrar
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) C4Analyzer.def -Wl,--kill-at
-	@echo "--- EXITO TOTAL: C4Analyzer.dll generado y exportado correctamente ---"
+	@echo "--- EXITO: C4Analyzer.dll generado. ESCANEA EN FL STUDIO AHORA ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

@@ -1,2 +1,12 @@
+// ============================================================================
 
-#include "rc/main.rc"
+// ============================================================================
+#include <windows.h>
+#include "resource.h"
+
+// 1. INFORMACIÓN DE VERSIÓN (Sin errores)
+#include "rc/version.rc"
+
+// 2. DIÁLOGOS Y MENÚS
+#include "rc/dialogs.rc"
+

@@ -1,14 +1,10 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V21.0 "Linker Bypass" - Generacion de DLL Exitosa
+# Version: V22.0 "DEF Strategy" - Solucion definitiva al problema del Main
 # =============================================================================
 
 CXX      := g++
-# Eliminamos --defsym de los flags y confiamos en el codigo fuente
-LINK_FLAGS := -shared -m32 -static-libgcc -static-libstdc++ \
-              -Wl,--export-all-symbols -Wl,--kill-at
-
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -24,7 +20,8 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x \
             -I../libraries/sp
 
-LIBS     := -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm -lole32 -lshlwapi
+LIBS     := -static-libgcc -static-libstdc++ \
+            -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm -lole32 -lshlwapi
 
 OBJS     := vstsdk-wrapper.o sp.o main.res
 TARGET   := C4Analyzer.dll
@@ -32,41 +29,13 @@ TARGET   := C4Analyzer.dll
 # =============================================================================
 # OBJETIVO PRINCIPAL
 # =============================================================================
-all: fix-libraries fix-wrapper $(TARGET)
+all: fix-libraries fix-wrapper fix-def $(TARGET)
 
 # =============================================================================
-# PASO CRITICO: REESCRIBIR EL WRAPPER (Soluciona el error del Linker)
-# =============================================================================
-fix-wrapper:
-	@echo "--- Regenerando vstsdk-wrapper.cpp para exportacion correcta ---"
-	@echo '#define _CRT_SECURE_NO_WARNINGS' > vstsdk-wrapper.cpp
-	@echo '#include <windows.h>' >> vstsdk-wrapper.cpp
-	@echo '#include <commdlg.h>' >> vstsdk-wrapper.cpp
-	@echo '#include <objidl.h>' >> vstsdk-wrapper.cpp
-	@echo '#include <shlwapi.h>' >> vstsdk-wrapper.cpp
-	@echo '#include "main.h"' >> vstsdk-wrapper.cpp
-	@echo '#include "audioeffect.cpp"' >> vstsdk-wrapper.cpp
-	@echo '#include "audioeffectx.cpp"' >> vstsdk-wrapper.cpp
-	@echo '' >> vstsdk-wrapper.cpp
-	@echo 'extern "C" {' >> vstsdk-wrapper.cpp
-	@echo '    // Exportacion Principal VST' >> vstsdk-wrapper.cpp
-	@echo '    __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
-	@echo '        if (!master) return 0;' >> vstsdk-wrapper.cpp
-	@echo '        Plugin* effect = new Plugin(master);' >> vstsdk-wrapper.cpp
-	@echo '        if (!effect) return 0;' >> vstsdk-wrapper.cpp
-	@echo '        return effect->getAeffect();' >> vstsdk-wrapper.cpp
-	@echo '    }' >> vstsdk-wrapper.cpp
-	@echo '    // Exportacion Legacy (Reemplaza al flag --defsym)' >> vstsdk-wrapper.cpp
-	@echo '    __declspec(dllexport) AEffect* main(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
-	@echo '        return VSTPluginMain(master);' >> vstsdk-wrapper.cpp
-	@echo '    }' >> vstsdk-wrapper.cpp
-	@echo '}' >> vstsdk-wrapper.cpp
-
-# =============================================================================
-# ZONA DE REPARACION (Perl Scripting Validado)
+# PASO 1: REPARACION DE LIBRERIAS (Perl Scripting Validado)
 # =============================================================================
 fix-libraries:
-	@echo "--- Generando Script de Reparacion (fixer.pl) ---"
+	@echo "--- [1/3] Ejecutando Reparaciones de Librerias ---"
 	@echo 'use strict; use warnings;' > fixer.pl
 	@echo 'my $$file = $$ARGV[0];' >> fixer.pl
 	@echo 'local $$/ = undef;' >> fixer.pl
@@ -95,7 +64,6 @@ fix-libraries:
 	@echo 'print $$out $$content;' >> fixer.pl
 	@echo 'close $$out;' >> fixer.pl
 
-	@echo "--- Ejecutando Reparaciones ---"
 	-grep -q "typedef struct HINSTANCE__" ../libraries/kali/app.h || sed -i 's/typedef.*HINSTANCE__.*Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
 	-grep -q "((char*&)" ../libraries/kali/runtime.h || sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
 	-grep -q "string(\"%s\"" ../libraries/win/kali/window.h || sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
@@ -111,13 +79,46 @@ fix-libraries:
 	perl fixer.pl ../libraries/win/kali/app.details.h
 
 # =============================================================================
+# PASO 2: REESCRITURA DE WRAPPER (Sin la funcion Main conflictiva)
+# =============================================================================
+fix-wrapper:
+	@echo "--- [2/3] Regenerando vstsdk-wrapper.cpp (Solo VSTPluginMain) ---"
+	@echo '#define _CRT_SECURE_NO_WARNINGS' > vstsdk-wrapper.cpp
+	@echo '#include <windows.h>' >> vstsdk-wrapper.cpp
+	@echo '#include <commdlg.h>' >> vstsdk-wrapper.cpp
+	@echo '#include <objidl.h>' >> vstsdk-wrapper.cpp
+	@echo '#include <shlwapi.h>' >> vstsdk-wrapper.cpp
+	@echo '#include "main.h"' >> vstsdk-wrapper.cpp
+	@echo '#include "audioeffect.cpp"' >> vstsdk-wrapper.cpp
+	@echo '#include "audioeffectx.cpp"' >> vstsdk-wrapper.cpp
+	@echo '' >> vstsdk-wrapper.cpp
+	@echo 'extern "C" {' >> vstsdk-wrapper.cpp
+	@echo '    // Solo definimos VSTPluginMain para evitar error de tipo en C++' >> vstsdk-wrapper.cpp
+	@echo '    __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
+	@echo '        if (!master) return 0;' >> vstsdk-wrapper.cpp
+	@echo '        Plugin* effect = new Plugin(master);' >> vstsdk-wrapper.cpp
+	@echo '        if (!effect) return 0;' >> vstsdk-wrapper.cpp
+	@echo '        return effect->getAeffect();' >> vstsdk-wrapper.cpp
+	@echo '    }' >> vstsdk-wrapper.cpp
+	@echo '}' >> vstsdk-wrapper.cpp
+
+# =============================================================================
+# PASO 3: CREACION DE ARCHIVO DEF (Mapeo de Main -> VSTPluginMain)
+# =============================================================================
+fix-def:
+	@echo "--- [3/3] Creando C4Analyzer.def para Alias de Linker ---"
+	@echo "EXPORTS" > C4Analyzer.def
+	@echo "    VSTPluginMain" >> C4Analyzer.def
+	@echo "    main = VSTPluginMain" >> C4Analyzer.def
+
+# =============================================================================
 # COMPILACION FINAL
 # =============================================================================
 
 $(TARGET): $(OBJS)
-	@echo "--- ENLAZANDO DLL FINAL (SIN DEFSYM) ---"
-	$(CXX) $(LINK_FLAGS) -o $@ $(OBJS) $(LIBS)
-	@echo "--- EXITO: C4Analyzer.dll ha nacido ---"
+	@echo "--- ENLAZANDO DLL CON DEFINITION FILE ---"
+	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) C4Analyzer.def -Wl,--kill-at
+	@echo "--- EXITO TOTAL: C4Analyzer.dll generado y exportado correctamente ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
@@ -129,6 +130,6 @@ main.res: main.rc
 	windres main.rc -O coff -o main.res
 
 clean:
-	rm -f *.o *.res *.dll fixer.pl
+	rm -f *.o *.res *.dll fixer.pl C4Analyzer.def vstsdk-wrapper.cpp
 
-.PHONY: all fix-libraries fix-wrapper clean
+.PHONY: all fix-libraries fix-wrapper fix-def clean

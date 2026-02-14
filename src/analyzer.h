@@ -60,7 +60,6 @@ struct Analyzer
                     + float(sp::adn), zlp[1])
             };
 
-            // USAR M4F EN LUGAR DE M128 PARA COMPATIBILIDAD CON SP.H
             sp::m4f prev[2] =
             {
                 sp::make_m4f(0,0,0,0),
@@ -72,7 +71,6 @@ struct Analyzer
                 sp::m4f x, y;
                 Band& b = band[m];
 
-                // Filter::tick devuelve m4f, ahora es compatible
                 x = Filter::tick(in[0], b.z[0], b.k);
                 y = interband(x, prev[0]);
                 prev[0] = x;
@@ -117,7 +115,6 @@ struct Analyzer
         savePeaks(peak, band, n, samples);
     }
 
-    // Adaptacion: Recibe m4f, castea internamente a m128 para shuffle, devuelve m4f
     static sp::m4f interband(const sp::m4f& x_in, const sp::m4f& y_in)
     {
         const m128& x = (const m128&)x_in;
@@ -173,12 +170,12 @@ struct Analyzer
     {
         lock.lock();
 
-        Dst::T* p = &dst.p_;
-        Dst::T* a = &dst.a_;
+        // FIX: Agregado 'typename' porque Dst es un template parameter
+        typename Dst::T* p = &dst.p_;
+        typename Dst::T* a = &dst.a_;
         const int n = nBandsPadded();
         for (int i = 0; i < n; i++)
         {
-            // Casteo seguro a float* para almacenamiento
             _mm_store_ps((float*)p, (m128&)peak[i].p);
             _mm_store_ps((float*)a, (m128&)peak[i].a);
             p += 4;
@@ -254,7 +251,6 @@ private:
 
     int nBandsPadded() const
     {
-        // note: we have (nBands + 1) filters:
         return (1u + nBands + (Band::N - 1)) / Band::N;
     }
 

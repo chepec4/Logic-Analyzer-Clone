@@ -1,11 +1,13 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Nivel: V6.0 "Cobertura Total" - Repara app.details.h y cierra el ciclo
+# Nivel: V7.0 "Cross-Platform" - Solucion __FUNCSIG__
 # =============================================================================
 
 CXX      := g++
-# Flags ajustados para evitar errores de sintaxis estricta en SDKs viejos
+# Flags ajustados:
+# -Wno-narrowing: Evita errores float->int.
+# -Wno-write-strings: Compatibilidad con cadenas legacy.
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -33,7 +35,7 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries $(TARGET)
 
 # =============================================================================
-# ZONA DE REPARACION (Todas las fases validadas + Fase 5 Nueva)
+# ZONA DE REPARACION (Fases 1-5 Validadas + Fase 6 Nueva)
 # =============================================================================
 fix-libraries:
 	@echo "--- [FASE 1] Reparaciones Estructurales ---"
@@ -42,7 +44,7 @@ fix-libraries:
 	-grep -q "string(\"%s\"" ../libraries/win/kali/window.h || sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
 	-grep -q "//#define DBG" ../libraries/kali/dbgutils.h || sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
 	
-	@echo "--- [FASE 2] Reparaciones de Templates (Coefficients & Widgets) ---"
+	@echo "--- [FASE 2] Reparaciones de Templates ---"
 	-grep -q "typedef typename T::Type V;" ../libraries/sp/coefficients.h || sed -i 's/typedef T::Type V;/typedef typename T::Type V;/g' ../libraries/sp/coefficients.h
 	-grep -q "typedef typename T::Type Widget;" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/typedef T::Type Widget;/typedef typename T::Type Widget;/g' ../libraries/win/kali/ui/native/widgets.h
 	-grep -q "typename Widget::Handle handle" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/Widget::Handle handle/typename Widget::Handle handle/g' ../libraries/win/kali/ui/native/widgets.h
@@ -57,12 +59,13 @@ fix-libraries:
 	-grep -q "typedef typename T::iterator" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::iterator/typedef typename T::iterator/g' ../libraries/kali/containers.h
 	-grep -q "typedef typename T::Value" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::Value/typedef typename T::Value/g' ../libraries/kali/containers.h
 
-	@echo "--- [FASE 5] EL NUEVO ERROR (App.Details) ---"
-	# Correccion del error actual: "instantiating erroneous template" en loadLayer
-	# 1. Agregamos typename a los typedefs dentro de app.details.h
+	@echo "--- [FASE 5] App Details (Template Syntax) ---"
 	-grep -q "typedef typename T::" ../libraries/win/kali/app.details.h || sed -i 's/typedef T::/typedef typename T::/g' ../libraries/win/kali/app.details.h
-	# 2. Corregimos el operador >> pegado en templates (error C++98 clasico)
 	-sed -i 's/Loaded<T>>/Loaded<T> >/g' ../libraries/win/kali/app.details.h
+
+	@echo "--- [FASE 6] COMPATIBILIDAD PLATAFORMA (EL NUEVO FIX) ---"
+	# Reemplazamos __FUNCSIG__ (Microsoft) por __PRETTY_FUNCTION__ (GCC)
+	-grep -q "__PRETTY_FUNCTION__" ../libraries/win/kali/platform.h || sed -i 's/__FUNCSIG__/__PRETTY_FUNCTION__/g' ../libraries/win/kali/platform.h
 
 	@echo "--- Codigo Completamente Reparado. Compilando... ---"
 

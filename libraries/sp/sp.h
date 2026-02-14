@@ -1,38 +1,40 @@
 #ifndef SP_INCLUDED
 #define SP_INCLUDED
 
+// Incluimos las definiciones base del sistema
 #include "kali/platform.h"
-
 #include "sp/base.h"
 #include "sp/core.h"
 #include "sp/coefficients.h"
 #include "sp/more.h"
 
 // ============================================================================
-// DEFINICIÓN SEGURA DE m4f (SIN SSE)
+// SOLUCION DE CONFLICTOS Y OPERADORES
 // ============================================================================
 
 namespace sp {
 
-struct m4f
+// TRUCO DE INGENIERIA:
+// Como 'm4f' (definido en core.h) no tiene constructor que acepte (a,b,c,d),
+// creamos esta funcion ayudante para fabricarlos manualmente.
+static inline m4f make_m4f(float a, float b, float c, float d)
 {
-    float v[4];
+    m4f temp;
+    temp[0] = a;
+    temp[1] = b;
+    temp[2] = c;
+    temp[3] = d;
+    return temp;
+}
 
-    m4f() {}
+// ----------------------------------------------------------------------------
+// Operadores Matematicos Manuales (Sin SSE para evitar errores de compilador)
+// ----------------------------------------------------------------------------
 
-    m4f(float a, float b, float c, float d)
-    {
-        v[0] = a; v[1] = b; v[2] = c; v[3] = d;
-    }
-
-    float& operator[](int i)       { return v[i]; }
-    float  operator[](int i) const { return v[i]; }
-};
-
-// Operadores explícitos
+// Suma (+)
 inline m4f operator+(const m4f& a, const m4f& b)
 {
-    return m4f(
+    return make_m4f(
         a[0] + b[0],
         a[1] + b[1],
         a[2] + b[2],
@@ -40,9 +42,10 @@ inline m4f operator+(const m4f& a, const m4f& b)
     );
 }
 
+// Multiplicacion (*) vector con vector
 inline m4f operator*(const m4f& a, const m4f& b)
 {
-    return m4f(
+    return make_m4f(
         a[0] * b[0],
         a[1] * b[1],
         a[2] * b[2],
@@ -50,47 +53,79 @@ inline m4f operator*(const m4f& a, const m4f& b)
     );
 }
 
-inline m4f operator*(float f, const m4f& b)
+// Multiplicacion (*) numero con vector
+inline m4f operator*(float s, const m4f& a)
 {
-    return m4f(
-        f * b[0],
-        f * b[1],
-        f * b[2],
-        f * b[3]
+    return make_m4f(
+        s * a[0],
+        s * a[1],
+        s * a[2],
+        s * a[3]
     );
 }
 
-// ============================================================================
-// DSP
-// ============================================================================
+// Multiplicacion (*) vector con numero
+inline m4f operator*(const m4f& a, float s)
+{
+    return make_m4f(
+        a[0] * s,
+        a[1] * s,
+        a[2] * s,
+        a[3] * s
+    );
+}
+
+// Maximo entre dos vectores
+inline m4f max(const m4f& a, const m4f& b)
+{
+    return make_m4f(
+        (a[0] > b[0]) ? a[0] : b[0],
+        (a[1] > b[1]) ? a[1] : b[1],
+        (a[2] > b[2]) ? a[2] : b[2],
+        (a[3] > b[3]) ? a[3] : b[3]
+    );
+}
+
+// ----------------------------------------------------------------------------
+// DSP - Estructuras de Filtros (Adaptadas para usar make_m4f)
+// ----------------------------------------------------------------------------
 
 struct TwoPoleLP
 {
     enum { State = 2, Coeff = 3 };
 
-    static inline_ m4f tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
+    static inline m4f tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
     {
-        m4f out =
-            in   * k[0] +
-            z[0] * k[1] +
-            z[1] * k[2];
+        // Formula: out = in*k0 + z0*k1 + z1*k2
+        // Desglosamos paso a paso para evitar confusion al compilador
+        m4f term1 = in * k[0];
+        m4f term2 = z[0] * k[1];
+        m4f term3 = z[1] * k[2];
+        
+        m4f out = term1 + term2 + term3;
 
         z[1] = z[0];
         z[0] = out;
+
         return out;
     }
 };
 
 struct TwoPoleLPSAx : TwoPoleLP
 {
-    static inline_ m4f tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
+    static inline m4f tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
     {
         m4f out = z[0];
-        z[0] =
-            in   * k[0] +
-            z[0] * k[1] +
-            z[1] * k[2];
-        z[1] = out;
+
+        m4f term1 = in * k[0];
+        m4f term2 = z[0] * k[1];
+        m4f term3 = z[1] * k[2];
+
+        m4f next = term1 + term2 + term3;
+
+        z[1] = z[0];
+        z[0] = next;
+
         return out;
     }
 };
@@ -98,9 +133,8 @@ struct TwoPoleLPSAx : TwoPoleLP
 struct ZeroLP
 {
     enum { State = 1 };
-
     template <typename T>
-    static inline_ T tick(T in, T (&z)[State])
+    static inline T tick(T in, T (&z)[State])
     {
         T out = in + z[0];
         z[0]  = in;
@@ -110,4 +144,4 @@ struct ZeroLP
 
 } // namespace sp
 
-#endif
+#endif // SP_INCLUDED

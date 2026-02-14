@@ -1,11 +1,11 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Version: V24.0 "FL Studio Fix" - Exportacion limpia para Bit-Bridge
+# Version: V25.0 "Lazarus" - Restauracion de DllMain y hInstance
 # =============================================================================
 
 CXX      := g++
-# Mantenemos 32-bit (-m32) ya que FL Studio lo soporta.
+# Mantenemos 32-bit compatible con Bridge
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -33,7 +33,7 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries fix-wrapper fix-def $(TARGET)
 
 # =============================================================================
-# PASO 1: REPARACION DE LIBRERIAS (Script Perl)
+# PASO 1: REPARACION DE LIBRERIAS (Perl Scripting)
 # =============================================================================
 fix-libraries:
 	@echo "--- [1/3] Ejecutando Reparaciones de Librerias ---"
@@ -80,10 +80,10 @@ fix-libraries:
 	perl fixer.pl ../libraries/win/kali/app.details.h
 
 # =============================================================================
-# PASO 2: REESCRITURA DE WRAPPER (EL TRUCO DE FL STUDIO)
+# PASO 2: REESCRITURA DE WRAPPER (CON DLLMAIN PARA GUI)
 # =============================================================================
 fix-wrapper:
-	@echo "--- [2/3] Regenerando vstsdk-wrapper.cpp ---"
+	@echo "--- [2/3] Regenerando vstsdk-wrapper.cpp con DllMain ---"
 	@echo '#define _CRT_SECURE_NO_WARNINGS' > vstsdk-wrapper.cpp
 	@echo '#include <windows.h>' >> vstsdk-wrapper.cpp
 	@echo '#include <commdlg.h>' >> vstsdk-wrapper.cpp
@@ -93,23 +93,32 @@ fix-wrapper:
 	@echo '#include "audioeffect.cpp"' >> vstsdk-wrapper.cpp
 	@echo '#include "audioeffectx.cpp"' >> vstsdk-wrapper.cpp
 	@echo '' >> vstsdk-wrapper.cpp
+	@echo '// VARIABLE GLOBAL NECESARIA PARA LA GUI' >> vstsdk-wrapper.cpp
+	@echo 'void* hInstance = 0;' >> vstsdk-wrapper.cpp
+	@echo '' >> vstsdk-wrapper.cpp
+	@echo '// PUNTO DE ENTRADA DE WINDOWS (RESUCITA LA GUI)' >> vstsdk-wrapper.cpp
+	@echo 'extern "C" BOOL WINAPI DllMain(HINSTANCE hInst, DWORD dwReason, LPVOID lpvReserved) {' >> vstsdk-wrapper.cpp
+	@echo '    if (dwReason == DLL_PROCESS_ATTACH) {' >> vstsdk-wrapper.cpp
+	@echo '        hInstance = hInst;' >> vstsdk-wrapper.cpp
+	@echo '    }' >> vstsdk-wrapper.cpp
+	@echo '    return 1;' >> vstsdk-wrapper.cpp
+	@echo '}' >> vstsdk-wrapper.cpp
+	@echo '' >> vstsdk-wrapper.cpp
 	@echo 'extern "C" {' >> vstsdk-wrapper.cpp
-	@echo '    // Funcion principal standard' >> vstsdk-wrapper.cpp
 	@echo '    __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
 	@echo '        if (!master) return 0;' >> vstsdk-wrapper.cpp
 	@echo '        Plugin* effect = new Plugin(master);' >> vstsdk-wrapper.cpp
 	@echo '        if (!effect) return 0;' >> vstsdk-wrapper.cpp
 	@echo '        return effect->getAeffect();' >> vstsdk-wrapper.cpp
 	@echo '    }' >> vstsdk-wrapper.cpp
-	@echo '    // PROXY PARA "main". No le llamamos "main" aqui para que C++ no llore.' >> vstsdk-wrapper.cpp
-	@echo '    // El archivo .DEF le cambiara el nombre a "main" al exportar.' >> vstsdk-wrapper.cpp
+	@echo '    // Proxy para alias main' >> vstsdk-wrapper.cpp
 	@echo '    __declspec(dllexport) AEffect* Main_Proxy(audioMasterCallback master) {' >> vstsdk-wrapper.cpp
 	@echo '        return VSTPluginMain(master);' >> vstsdk-wrapper.cpp
 	@echo '    }' >> vstsdk-wrapper.cpp
 	@echo '}' >> vstsdk-wrapper.cpp
 
 # =============================================================================
-# PASO 3: CREACION DE ARCHIVO DEF (EL RENOMBRAMIENTO MAGICO)
+# PASO 3: ARCHIVO DEF
 # =============================================================================
 fix-def:
 	@echo "--- [3/3] Creando C4Analyzer.def ---"
@@ -122,10 +131,9 @@ fix-def:
 # =============================================================================
 
 $(TARGET): $(OBJS)
-	@echo "--- ENLAZANDO DLL (32-bit con Export Fix) ---"
-	# Usamos --kill-at para quitar los @8 y el .def para renombrar
+	@echo "--- ENLAZANDO DLL (Con DllMain y Exports) ---"
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) C4Analyzer.def -Wl,--kill-at
-	@echo "--- EXITO: C4Analyzer.dll generado. ESCANEA EN FL STUDIO AHORA ---"
+	@echo "--- EXITO: C4 Analyzer listo para GUI ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

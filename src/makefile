@@ -1,7 +1,6 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
-# Autor: ChepeC4 | C4 Productions
-# Version: V31.0 "The Final Fix" - Reparación Automática de Librerías
+# Versión: V32.0 "The Final Stand" - Limpieza Absoluta y Corrección de Tipos
 # =============================================================================
 
 CXX      := g++
@@ -20,47 +19,46 @@ LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopeng
 OBJS     := vstsdk-wrapper.o sp.o main.res
 TARGET   := C4Analyzer.dll
 
-all: clean-slate restore-files fix-all-libraries patch-wrapper build-def $(TARGET)
+all: clean-slate restore-files fix-libraries rebuild-wrapper build-def $(TARGET)
 
 clean-slate:
 	rm -f *.o *.res *.dll fixer.pl plugin.def vstsdk-wrapper.cpp
 
 restore-files:
-	@echo "--- [0/4] Restaurando Archivos ---"
-	git checkout vstsdk-wrapper.cpp
+	@echo "--- [0/4] Restaurando archivos de sistema ---"
+	git checkout vstsdk-wrapper.cpp ../libraries/win/kali/window.h ../libraries/kali/dbgutils.h
 
-fix-all-libraries:
-	@echo "--- [1/4] Reparando Errores de Tipos y Macros en Librerías ---"
-	# Reparación de window.h (Error de operandos ?: )
-	sed -i 's/!comments ? text/!comments ? (string)text/g' ../libraries/win/kali/window.h
-	# Reparación de dbgutils.h (Error de macro _DEBUG)
+fix-libraries:
+	@echo "--- [1/4] Reparando ambigüedad de tipos en Kali ---"
+	# Corrección definitiva: usamos la función string() de kali explícitamente para evitar ambigüedad
+	sed -i 's/!comments ? text/!comments ? kali::string("%s", text)/g' ../libraries/win/kali/window.h
+	# Reparación de macros de Debug
 	sed -i 's/#define DBG (defined(_DEBUG))/#define DBG 0/g' ../libraries/kali/dbgutils.h
-	# Reparación de runtime.h (SSE y Castings)
+	# Reparación de punteros en runtime.h
 	sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
 
-patch-wrapper:
-	@echo "--- [2/4] Limpiando Wrapper para evitar Redefinición ---"
-	# Borramos cualquier VSTPluginMain que hayamos inyectado antes para empezar de cero
-	sed -i 's/AEffect\s*\*\s*main/AEffect* Main_Old/g' vstsdk-wrapper.cpp
-	@echo "" >> vstsdk-wrapper.cpp
-	@echo 'extern "C" {' >> vstsdk-wrapper.cpp
-	@echo '  HINSTANCE hInstance = 0;' >> vstsdk-wrapper.cpp
-	@echo '  BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID p) { if(r==1) hInstance=h; return TRUE; }' >> vstsdk-wrapper.cpp
-	@echo '  __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback m) { ' >> vstsdk-wrapper.cpp
-	@echo '    if(!m) return 0; Plugin* e = new Plugin(m); return e ? e->getAeffect() : 0;' >> vstsdk-wrapper.cpp
-	@echo '  }' >> vstsdk-wrapper.cpp
-	@echo '}' >> vstsdk-wrapper.cpp
+rebuild-wrapper:
+	@echo "--- [2/4] Reconstruyendo Wrapper desde cero (Sin duplicados) ---"
+	# Borramos el archivo y lo creamos nuevo para que NO haya dos VSTPluginMain
+	echo '#include <windows.h>' > vstsdk-wrapper.cpp
+	echo '#include "main.h"' >> vstsdk-wrapper.cpp
+	echo 'extern "C" {' >> vstsdk-wrapper.cpp
+	echo '  HINSTANCE hInstance = 0;' >> vstsdk-wrapper.cpp
+	echo '  BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID p) { if(r==1) hInstance=h; return TRUE; }' >> vstsdk-wrapper.cpp
+	echo '  __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback m) { if(!m) return 0; Plugin* e = new Plugin(m); return e ? e->getAeffect() : 0; }' >> vstsdk-wrapper.cpp
+	echo '  __declspec(dllexport) AEffect* main(audioMasterCallback m) { return VSTPluginMain(m); }' >> vstsdk-wrapper.cpp
+	echo '}' >> vstsdk-wrapper.cpp
 
 build-def:
-	@echo "--- [3/4] Creando DEF ---"
+	@echo "--- [3/4] Generando Definition File ---"
 	@echo "EXPORTS" > plugin.def
 	@echo "    VSTPluginMain" >> plugin.def
 	@echo "    main = VSTPluginMain" >> plugin.def
 
 $(TARGET): $(OBJS)
-	@echo "--- [4/4] Enlazando ---"
+	@echo "--- [4/4] Enlazando DLL Final ---"
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) plugin.def -Wl,--kill-at
-	@echo "--- PROCESO COMPLETADO ---"
+	@echo "--- COMPILACIÓN EXITOSA ---"
 
 vstsdk-wrapper.o: vstsdk-wrapper.cpp
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@

@@ -1,49 +1,30 @@
 #ifndef PLUGIN_INCLUDED
 #define PLUGIN_INCLUDED
 
-// ============================================================================
-// 1. WINDOWS & SYSTEM (Corregido para incluir CHOOSECOLOR y OLE)
-// ============================================================================
-// Forzamos la inclusión completa de Windows
-#ifdef WIN32_LEAN_AND_MEAN
- #undef WIN32_LEAN_AND_MEAN
+// 1. INCLUDES DEL SISTEMA (Orden estricto)
+#ifndef WIN32_LEAN_AND_MEAN
+ #define WIN32_LEAN_AND_MEAN
 #endif
-#define _WIN32_WINNT 0x0600
-
 #include <windows.h>
-#include <commdlg.h> // Para Color Chooser
-#include <ole2.h>    // Para IStream
-#include <shlwapi.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
-// ============================================================================
-// 2. PARCHES DE CÓDIGO VIEJO (DBG)
-// ============================================================================
-// Definimos DBG manualmente para evitar el error 'defined(_DEBUG)' de Kali
-#ifdef _DEBUG
- #define DBG 1
-#else
- #define DBG 0
-#endif
-
-// ============================================================================
-// 3. MATEMÁTICAS SSE (El arreglo para analyzer.h)
-// ============================================================================
+// 2. PARCHES SSE (Matemáticas de Audio)
 #include <xmmintrin.h>
 #include <emmintrin.h>
 #include <pmmintrin.h>
 
 #define V(x) (float)(x)
 
-// Hacemos hsum inline para que curves.h lo vea
+// Suma horizontal
 inline float hsum(__m128 x) {
     __m128 t = _mm_add_ps(x, _mm_movehl_ps(x, x));
     __m128 r = _mm_add_ss(t, _mm_shuffle_ps(t, t, 1));
     float f; _mm_store_ss(&f, r); return f;
 }
 
+// Shuffles (Necesarios para analyzer.h y curves.h)
 template <int i0, int i1, int i2, int i3>
 inline __m128 shuffle(__m128 x) {
     return _mm_shuffle_ps(x, x, _MM_SHUFFLE(i3, i2, i1, i0));
@@ -54,10 +35,9 @@ inline __m128 shuffle(__m128 a, __m128 b) {
     return _mm_shuffle_ps(a, b, _MM_SHUFFLE(i3, i2, i1, i0));
 }
 
-// ============================================================================
-// 4. IDENTIDAD
-// ============================================================================
+// 3. IDENTIDAD
 #define tf 
+// NOTA: NO definimos 'copy' aquí para evitar romper Kali.
 
 #ifndef NAME
  #define NAME "C4 Analyzer"
@@ -69,35 +49,26 @@ inline __m128 shuffle(__m128 a, __m128 b) {
  #define VERSION 1.0
 #endif
 
-// ============================================================================
-// 5. INCLUDES DEL PLUGIN
-// ============================================================================
+// 4. INCLUDES ORIGINALES
 #include "preset-handler.h"
 #include "sa.legacy.h"
 #include "sa.display.h"
 
-// ============================================================================
-// 6. SOBRECARGA DE OPERADORES (Vital para compile SP)
-// ============================================================================
+// 5. OPERADORES SP (Arreglo para analyzer.h)
+// Implementación directa sin templates helpers para evitar ambigüedad
 namespace sp {
-    template <typename T>
-    inline const __m128& as_m128(const T& x) {
-        return *reinterpret_cast<const __m128*>(&x);
-    }
     inline __m128 operator*(const array<float, 4, SSE>& a, __m128 b) {
-        return _mm_mul_ps(as_m128(a), b);
+        return _mm_mul_ps(*reinterpret_cast<const __m128*>(&a), b);
     }
     inline __m128 operator+(const array<float, 4, SSE>& a, __m128 b) {
-        return _mm_add_ps(as_m128(a), b);
+        return _mm_add_ps(*reinterpret_cast<const __m128*>(&a), b);
     }
     inline __m128 max(const array<float, 4, SSE>& a, __m128 b) {
-        return _mm_max_ps(as_m128(a), b);
+        return _mm_max_ps(*reinterpret_cast<const __m128*>(&a), b);
     }
 }
 
-// ============================================================================
-// 7. CLASE PLUGIN
-// ============================================================================
+// 6. CLASE PLUGIN
 struct Plugin : sp::AlignedNew <16>, PresetHandler <Plugin, 9, sa::config::ParameterCount> {
     typedef PresetHandler <Plugin, 9, sa::config::ParameterCount> Base;
 

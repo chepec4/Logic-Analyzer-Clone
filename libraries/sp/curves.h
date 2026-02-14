@@ -15,13 +15,11 @@ struct CardinalSpline
     typedef float T;
 
     static int count(int n) {
-        // count dst points for a given number of src points:
         return (n - 1) * Segments + 1;
     }
 
     void operator() (T (*dst_)[2], const T (* restrict_ src)[2], int n) const
     {
-        // note: 3 src points minimum
         T (* restrict_ dst)[Segments][2] = (T (*)[Segments][2]) dst_;
         m128 z[2] = {_mm_set_ps(src[1][0], src[0][0], src[0][0], 0),
                      _mm_set_ps(src[1][1], src[0][1], src[0][1], 0)};
@@ -50,9 +48,10 @@ private:
 
         for (int i = 0; i < Segments; i++)
         {
-            // FIX: Casting explicito a m4f para usar el operador * de sp.h
-            _mm_store_ss(dst[i] + 0, hsum( (sp::m4f&)z[0] * k[i] ));
-            _mm_store_ss(dst[i] + 1, hsum( (sp::m4f&)z[1] * k[i] ));
+            // FIX: hsum devuelve float, _mm_store_ss requiere m128. Usamos _mm_set_ss.
+            // FIX 2: Casting explicito a sp::m4f& para permitir la multiplicacion.
+            _mm_store_ss(dst[i] + 0, _mm_set_ss(hsum( (sp::m4f&)z[0] * k[i] )));
+            _mm_store_ss(dst[i] + 1, _mm_set_ss(hsum( (sp::m4f&)z[1] * k[i] )));
         }
     }
 

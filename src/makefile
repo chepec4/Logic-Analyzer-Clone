@@ -1,9 +1,9 @@
 # =============================================================================
-# MAKEFILE AUTOCORRECTOR - C4 ANALYZER
-# Parchea código viejo al vuelo y compila con soporte VST completo
+# MAKEFILE FINAL - C4 ANALYZER (Estrategia Limpia)
 # =============================================================================
 
 CXX      := g++
+# Flags críticas: -fpermissive para ignorar errores de tipos en kali
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
@@ -14,21 +14,17 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x \
             -I../libraries/sp
 
-LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm
+LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopengl32 -lwinmm -lole32 -lshlwapi
 
 OBJS     := vstsdk-wrapper.o sp.o main.res
 
-# Objetivo Principal: Primero parches, luego DLL
-all: patch-files C4Analyzer.dll
+# REGLA DE PARCHEO MANUAL (Solo analyzer.h necesita esto)
+all: patch-analyzer C4Analyzer.dll
 
-# REGLA DE PARCHEO (La Magia)
-# 1. Agrega 'typename' donde falta en analyzer.h
-# 2. Arregla el error ternario (? :) en window.h convirtiendo char* a string
-patch-files:
-	@echo "--- Aplicando parches automáticos ---"
+patch-analyzer:
+	@echo "--- Parchando analyzer.h ---"
 	-sed -i 's/Dst::T/typename Dst::T/g' analyzer.h
-	-sed -i 's/!comments ? text/!comments ? string(text)/g' ../libraries/win/kali/window.h
-	@echo "--- Parches aplicados ---"
+	@echo "--- Analyzer parchado ---"
 
 C4Analyzer.dll: $(OBJS)
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols -Wl,--kill-at

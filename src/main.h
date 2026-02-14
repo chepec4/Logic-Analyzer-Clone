@@ -2,18 +2,34 @@
 #define PLUGIN_INCLUDED
 
 // ============================================================================
-// 1. INCLUDES DE SISTEMA (Primero Windows)
+// 1. WINDOWS & SYSTEM (Corregido para incluir CHOOSECOLOR y OLE)
 // ============================================================================
-#ifndef WIN32_LEAN_AND_MEAN
- #define WIN32_LEAN_AND_MEAN
+// Forzamos la inclusión completa de Windows
+#ifdef WIN32_LEAN_AND_MEAN
+ #undef WIN32_LEAN_AND_MEAN
 #endif
+#define _WIN32_WINNT 0x0600
+
 #include <windows.h>
+#include <commdlg.h> // Para Color Chooser
+#include <ole2.h>    // Para IStream
+#include <shlwapi.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
 // ============================================================================
-// 2. PARCHES MATEMÁTICOS (SSE) - Para Analyzer y Curves
+// 2. PARCHES DE CÓDIGO VIEJO (DBG)
+// ============================================================================
+// Definimos DBG manualmente para evitar el error 'defined(_DEBUG)' de Kali
+#ifdef _DEBUG
+ #define DBG 1
+#else
+ #define DBG 0
+#endif
+
+// ============================================================================
+// 3. MATEMÁTICAS SSE (El arreglo para analyzer.h)
 // ============================================================================
 #include <xmmintrin.h>
 #include <emmintrin.h>
@@ -21,7 +37,7 @@
 
 #define V(x) (float)(x)
 
-// Inyectamos esto en el namespace global y en sp para asegurar que se encuentre
+// Hacemos hsum inline para que curves.h lo vea
 inline float hsum(__m128 x) {
     __m128 t = _mm_add_ps(x, _mm_movehl_ps(x, x));
     __m128 r = _mm_add_ss(t, _mm_shuffle_ps(t, t, 1));
@@ -39,10 +55,9 @@ inline __m128 shuffle(__m128 a, __m128 b) {
 }
 
 // ============================================================================
-// 3. IDENTIDAD Y UTILS
+// 4. IDENTIDAD
 // ============================================================================
 #define tf 
-#define copy(dest, src, size) memcpy(dest, src, size)
 
 #ifndef NAME
  #define NAME "C4 Analyzer"
@@ -55,22 +70,20 @@ inline __m128 shuffle(__m128 a, __m128 b) {
 #endif
 
 // ============================================================================
-// 4. INCLUDES DEL PLUGIN
+// 5. INCLUDES DEL PLUGIN
 // ============================================================================
 #include "preset-handler.h"
 #include "sa.legacy.h"
 #include "sa.display.h"
 
 // ============================================================================
-// 5. OPERADORES MATEMÁTICOS FALTANTES (SP)
+// 6. SOBRECARGA DE OPERADORES (Vital para compile SP)
 // ============================================================================
 namespace sp {
-    // Truco para convertir array a __m128
     template <typename T>
     inline const __m128& as_m128(const T& x) {
         return *reinterpret_cast<const __m128*>(&x);
     }
-    
     inline __m128 operator*(const array<float, 4, SSE>& a, __m128 b) {
         return _mm_mul_ps(as_m128(a), b);
     }
@@ -83,7 +96,7 @@ namespace sp {
 }
 
 // ============================================================================
-// 6. CLASE PLUGIN
+// 7. CLASE PLUGIN
 // ============================================================================
 struct Plugin : sp::AlignedNew <16>, PresetHandler <Plugin, 9, sa::config::ParameterCount> {
     typedef PresetHandler <Plugin, 9, sa::config::ParameterCount> Base;

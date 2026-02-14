@@ -1,9 +1,6 @@
-# Makefile C4 Analyzer - Versión 32-bit Estable
-# Programador: ChepeC4
-
 CXX      := g++
-# Usamos -m32 para estabilidad de las librerías matemáticas sp/kali
-CXXFLAGS := -O2 -m32 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
+# Añadimos -msse y -msse2 para que entienda las librerías de audio sp
+CXXFLAGS := -O2 -m32 -msse -msse2 -std=gnu++03 -fpermissive -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
             -I../libraries \
@@ -30,6 +27,3 @@ sp.o: sp.cpp
 
 main.res: main.rc
 	windres main.rc -O coff -o main.res
-
-clean:
-	rm -f *.o *.res *.dll

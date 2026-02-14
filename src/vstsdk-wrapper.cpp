@@ -12,4 +12,7 @@ extern "C" {
         if (!effect) return 0;
         return effect->getAeffect();
     }
+    __declspec(dllexport) AEffect* main(audioMasterCallback master) {
+        return VSTPluginMain(master);
+    }
 }

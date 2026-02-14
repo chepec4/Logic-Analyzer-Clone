@@ -1,10 +1,10 @@
 # =============================================================================
-# MAKEFILE BOOTSTRAPPER (Autocorrector de Tabulaciones)
+# MAKEFILE BOOTSTRAPPER V11.0 (Generador Automatico)
+# Autor: ChepeC4 - Correccion de Namespaces y Templates
 # =============================================================================
 
-# Si el usuario ejecuta "make", esto regenera el Makefile real y lo lanza
 all:
-	@echo "--- Generando Makefile corregido (V10.0) ---"
+	@echo "--- Generando Makefile corregido (V11.0) ---"
 	@echo "CXX := g++" > Makefile.run
 	@echo "CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w -Wno-narrowing -Wno-write-strings -ftemplate-depth=3000 -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 -DNAME=\"\\\"C4 Analyzer\\\"\" -DCOMPANY=\"\\\"C4 Productions\\\"\" -DAUTHOR=\"\\\"ChepeC4\\\"\"" >> Makefile.run
 	@echo "INC := -I. -I../libraries -I../libraries/win -I../libraries/vst -I../libraries/vst/public.sdk/source/vst2.x -I../libraries/vst/pluginterfaces/vst2.x -I../libraries/sp" >> Makefile.run
@@ -35,11 +35,13 @@ all:
 	@echo "	-sed -i 's/template <> static void _ <Size> (int) {}/static void _(I2T<N>, int) {}/g' ../libraries/kali/runtime.h" >> Makefile.run
 	@echo "	-grep -q \"aux\[512\]\" ../libraries/kali/runtime.h || sed -i 's/static char aux\[\] = FUNCSIG_;/char aux[512]; strncpy(aux, FUNCSIG_, 511); aux[511]=0;/g' ../libraries/kali/runtime.h" >> Makefile.run
 	@echo "	-sed -i 's/aux\[sizeof(aux)/ \\/\\/ aux[sizeof(aux)/g' ../libraries/kali/runtime.h" >> Makefile.run
-	@echo "	@echo \"--- [FASE 5] ADELANTAMIENTO ---\"" >> Makefile.run
+	@echo "	@echo \"--- [FASE 5] ADELANTAMIENTO (Typenames) ---\"" >> Makefile.run
 	@echo "	-grep -q \"typedef typename T::iterator\" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::iterator/typedef typename T::iterator/g' ../libraries/kali/containers.h" >> Makefile.run
 	@echo "	-grep -q \"typedef typename T::Value\" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::Value/typedef typename T::Value/g' ../libraries/kali/containers.h" >> Makefile.run
 	@echo "	-grep -q \"typedef typename T::\" ../libraries/win/kali/app.details.h || sed -i 's/typedef T::/typedef typename T::/g' ../libraries/win/kali/app.details.h" >> Makefile.run
 	@echo "	-sed -i 's/Loaded<T>>/Loaded<T> >/g' ../libraries/win/kali/app.details.h" >> Makefile.run
+	@echo "	@echo \"--- [FASE 6] FIX NAMESPACE APP.DETAILS (El error actual) ---\"" >> Makefile.run
+	@echo "	-grep -q \"kali::ui::native::widget::Base::thunk_\" ../libraries/win/kali/app.details.h || sed -i 's/widget::Base::thunk_/kali::ui::native::widget::Base::thunk_/g' ../libraries/win/kali/app.details.h" >> Makefile.run
 	@echo "" >> Makefile.run
 	@echo "\$$(TARGET): \$$(OBJS)" >> Makefile.run
 	@echo "	@echo \"--- ENLAZANDO DLL FINAL ---\"" >> Makefile.run

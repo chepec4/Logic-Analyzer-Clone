@@ -2,30 +2,50 @@
 #define PLUGIN_INCLUDED
 
 // ============================================================================
-// PARCHES DE COMPATIBILIDAD (ChepeC4 Fixes)
+// 1. CORRECCIÓN DE WINDOWS (Prioridad Máxima)
+// ============================================================================
+// Incluimos esto PRIMERO para que HINSTANCE y HWND existan
+#ifndef WIN32_LEAN_AND_MEAN
+ #define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+// ============================================================================
+// 2. PARCHES MATEMÁTICOS (SSE & Intrinsics)
 // ============================================================================
 #include <xmmintrin.h>
 #include <emmintrin.h>
 #include <pmmintrin.h>
 #include <string.h>
 
-// 1. Definimos 'hsum' para sumar horizontalmente vectores SSE
+// Definimos la macro V que faltaba en coefficients.h
+#define V(x) (float)(x)
+
+// Suma horizontal (hsum)
 inline float hsum(__m128 x) {
     __m128 t = _mm_add_ps(x, _mm_movehl_ps(x, x));
     __m128 r = _mm_add_ss(t, _mm_shuffle_ps(t, t, 1));
     float f; _mm_store_ss(&f, r); return f;
 }
 
-// 2. Definimos 'shuffle' como PLANTILLA (Template), no como macro
+// Shuffle de 1 argumento (ya lo teníamos)
 template <int i0, int i1, int i2, int i3>
 inline __m128 shuffle(__m128 x) {
     return _mm_shuffle_ps(x, x, _MM_SHUFFLE(i3, i2, i1, i0));
 }
 
-// 3. Parche para 'tf' (Trace Function) que daba error antes
-#define tf
+// NUEVO: Shuffle de 2 argumentos (El que causaba el error en analyzer.h)
+template <int i0, int i1, int i2, int i3>
+inline __m128 shuffle(__m128 a, __m128 b) {
+    return _mm_shuffle_ps(a, b, _MM_SHUFFLE(i3, i2, i1, i0));
+}
 
-// 4. Identidad del Plugin
+// ============================================================================
+// 3. PARCHES DE IDENTIDAD Y UTILS
+// ============================================================================
+#define tf // Anulamos el trace function
+#define copy(dest, src, size) memcpy(dest, src, size) // Recuperamos copy
+
 #ifndef NAME
  #define NAME "C4 Analyzer"
 #endif
@@ -37,29 +57,37 @@ inline __m128 shuffle(__m128 x) {
 #endif
 
 // ============================================================================
-// INCLUDES ORIGINALES
+// 4. INCLUDES ORIGINALES
 // ============================================================================
 #include "preset-handler.h"
 #include "sa.legacy.h"
 #include "sa.display.h"
 
 // ============================================================================
-// PARCHES DE OPERADORES MATEMÁTICOS (Crucial para analyzer.h)
-// Enseñamos al compilador a mezclar tipos 'sp::array' con '__m128'
+// 5. PARCHES DE OPERADORES 'SP' (Fuerza Bruta)
 // ============================================================================
+// Aquí solucionamos el error "no member named data"
 namespace sp {
-    // Sobrecarga para multiplicar (Band::T * m128)
+    // Truco: Convertimos el array a puntero __m128 directamente
     template <typename T>
-    inline __m128 operator*(const array<float, 4, SSE>& a, __m128 b) {
-        return _mm_mul_ps(a.data, b);
+    inline const __m128& as_m128(const T& x) {
+        return *reinterpret_cast<const __m128*>(&x);
     }
-    // Sobrecarga para sumar
+
+    // Sobrecarga MULTIPLICACIÓN (Band::T * m128)
+    inline __m128 operator*(const array<float, 4, SSE>& a, __m128 b) {
+        return _mm_mul_ps(as_m128(a), b);
+    }
+    
+    // Sobrecarga SUMA (Band::T + m128)
     inline __m128 operator+(const array<float, 4, SSE>& a, __m128 b) {
-        return _mm_add_ps(a.data, b);
+        return _mm_add_ps(as_m128(a), b);
     }
 }
 
-// ............................................................................
+// ============================================================================
+// 6. CLASE PRINCIPAL
+// ============================================================================
 
 struct Plugin :
     sp::AlignedNew <16>,

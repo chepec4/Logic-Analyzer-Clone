@@ -1,4 +1,3 @@
-
 #ifndef SP_CURVES_INCLUDED
 #define SP_CURVES_INCLUDED
 
@@ -51,8 +50,9 @@ private:
 
         for (int i = 0; i < Segments; i++)
         {
-            _mm_store_ss(dst[i] + 0, hsum(z[0] * k[i]));
-            _mm_store_ss(dst[i] + 1, hsum(z[1] * k[i]));
+            // FIX: Casting explicito a m4f para usar el operador * de sp.h
+            _mm_store_ss(dst[i] + 0, hsum( (sp::m4f&)z[0] * k[i] ));
+            _mm_store_ss(dst[i] + 1, hsum( (sp::m4f&)z[1] * k[i] ));
         }
     }
 
@@ -79,9 +79,6 @@ private:
     {
         #pragma warning(push)
         #pragma warning(disable: 4640)
-        // Coeff initialization depends solely on template
-        // parameters and it only writes, thus it's always
-        // OK even if triggered within different threads
         static const Coeff k;
         #pragma warning(pop)
         return k;

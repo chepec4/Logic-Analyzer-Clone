@@ -1,4 +1,3 @@
-
 #ifndef ANALYZER_INCLUDED
 #define ANALYZER_INCLUDED
 
@@ -61,17 +60,19 @@ struct Analyzer
                     + float(sp::adn), zlp[1])
             };
 
-            m128 prev[2] =
+            // USAR M4F EN LUGAR DE M128 PARA COMPATIBILIDAD CON SP.H
+            sp::m4f prev[2] =
             {
-                _mm_setzero_ps(),
-                _mm_setzero_ps()
+                sp::make_m4f(0,0,0,0),
+                sp::make_m4f(0,0,0,0)
             };
 
             for (int m = 0; m < n; m++)
             {
-                m128 x, y;
+                sp::m4f x, y;
                 Band& b = band[m];
 
+                // Filter::tick devuelve m4f, ahora es compatible
                 x = Filter::tick(in[0], b.z[0], b.k);
                 y = interband(x, prev[0]);
                 prev[0] = x;
@@ -100,10 +101,10 @@ struct Analyzer
                 in = (in + float(in_[1][i])) * .5f;
             in = ZeroLP::tick(in + float(sp::adn), zlp[0]);
 
-            m128 prev = _mm_setzero_ps();
+            sp::m4f prev = sp::make_m4f(0,0,0,0);
             for (int m = 0; m < n; m++)
             {
-                m128 x, y;
+                sp::m4f x, y;
                 Band& b = band[m];
                 x = Filter::tick(in, b.z[0], b.k);
                 y = interband(x, prev);
@@ -116,10 +117,16 @@ struct Analyzer
         savePeaks(peak, band, n, samples);
     }
 
-    static m128 interband(const m128& x, const m128& y)
+    // Adaptacion: Recibe m4f, castea internamente a m128 para shuffle, devuelve m4f
+    static sp::m4f interband(const sp::m4f& x_in, const sp::m4f& y_in)
     {
-        return _mm_sub_ps(x, shuffle<0, 2, 1, 2>
+        const m128& x = (const m128&)x_in;
+        const m128& y = (const m128&)y_in;
+        
+        m128 res = _mm_sub_ps(x, shuffle<0, 2, 1, 2>
             (shuffle<3, 3, 0, 0>(y, x), x));
+            
+        return (sp::m4f&)res;
     }
 
     // ........................................................................
@@ -129,7 +136,7 @@ struct Analyzer
     {
         lock.lock();
 
-        m128 zero = _mm_setzero_ps();
+        sp::m4f zero = sp::make_m4f(0,0,0,0);
 
         if (clear)
         {
@@ -137,7 +144,7 @@ struct Analyzer
             counter = samples;
             for (int i = 0; i < n; i++)
             {
-                m128 e   = src[i].e;
+                sp::m4f e = src[i].e;
                 dst[i].p = src[i].p * e;
                 dst[i].a = src[i].a * e;
                 src[i].p = zero;
@@ -149,7 +156,7 @@ struct Analyzer
             counter += samples;
             for (int i = 0; i < n; i++)
             {
-                m128 e   = src[i].e;
+                sp::m4f e = src[i].e;
                 dst[i].p = max(dst[i].p, src[i].p * e);
                 dst[i].a = dst[i].a + src[i].a * e;
                 src[i].p = zero;
@@ -171,8 +178,9 @@ struct Analyzer
         const int n = nBandsPadded();
         for (int i = 0; i < n; i++)
         {
-            _mm_store_ps(p, peak[i].p);
-            _mm_store_ps(a, peak[i].a);
+            // Casteo seguro a float* para almacenamiento
+            _mm_store_ps((float*)p, (m128&)peak[i].p);
+            _mm_store_ps((float*)a, (m128&)peak[i].a);
             p += 4;
             a += 4;
         }
@@ -223,10 +231,6 @@ struct Analyzer
         double ff = (f / sqrt(k)) * (1 - r * f * f);
         for (;;)
         {
-            // trace.full("%02i: %.02f\n", n, f);
-            // trace("%.02f, %.02f", f, ff);
-            // sp::twoPoleLPCoeffs(band[n].k, fs, ff, 2 * bpo, ferr);
-
             sp::twoPoleLPCoeffs
                 (sp::IterA <Band::T, float>
                 (band[n / Band::N].k, n % Band::N),
@@ -235,7 +239,6 @@ struct Analyzer
             double e = emphasis(bpo, ff, fedg);
             band[n / Band::N].e[n % Band::N]
                 = float(e * e); // ! we use squared peak and avrg
-            // trace(" -> %.02f\n", e);
 
             ff = f * sqrt(k) * (1 - r * f * f);
             if ((ff > (fedg + 1)) || (ff > fmax))
@@ -245,14 +248,6 @@ struct Analyzer
             freqMax = f;
             f *= k;
         }
-
-        #if 0
-        n = nBandsPadded();
-        if ((n * Band::N) > MaxBands)
-            DBGSTOP_;
-        trace.full("Bands(%6i, %i): %i, %i (%i * 4)\n",
-            int(fs), bpo, nBands, n * Band::N, n);
-        #endif
     }
 
 private:
@@ -280,12 +275,6 @@ private:
         memset(band, 0, sizeof(band));
         memset(peak, 0, sizeof(peak));
         memset(zlp,  0, sizeof(zlp));
-
-        /* size_t p;
-        p = (size_t) (void*) &band[0].p[0];
-        trace.warn("band data align: %i (%p)\n", int(p & 15), p);
-        p = (size_t) (void*) &peak[0].a[0];
-        trace.warn("peak align: %i (%p)\n", int(p & 15), p); */
     }
 
 public:
@@ -325,7 +314,7 @@ public:
         T a;
 
         struct Out 
-        {   // fixme, invent some descriptive names for p_ and a_ :)
+        {   
             typedef Band::T::Type T;
             T p_, p[MaxBands - 1],
               a_, a[MaxBands - 1];

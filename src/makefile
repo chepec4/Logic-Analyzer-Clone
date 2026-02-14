@@ -1,13 +1,11 @@
 # =============================================================================
 # MAKEFILE MAESTRO - C4 ANALYZER
 # Autor: ChepeC4 | C4 Productions
-# Nivel de Ingenieria: V5.0 "Blindado" - Prediccion de Errores Activa
+# Nivel: V6.0 "Cobertura Total" - Repara app.details.h y cierra el ciclo
 # =============================================================================
 
 CXX      := g++
-# AGREGADO: 
-# -Wno-narrowing: Evita errores por convertir float->int en inicializaciones (comun en GUI antigua).
-# -Wno-write-strings: Evita errores con textos en el SDK VST antiguo.
+# Flags ajustados para evitar errores de sintaxis estricta en SDKs viejos
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w \
             -Wno-narrowing -Wno-write-strings \
             -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1 \
@@ -35,40 +33,38 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries $(TARGET)
 
 # =============================================================================
-# ZONA DE REPARACION INTELIGENTE (VERIFICA ANTES DE APLICAR)
+# ZONA DE REPARACION (Todas las fases validadas + Fase 5 Nueva)
 # =============================================================================
 fix-libraries:
-	@echo "--- [FASE 1] Reparaciones Estructurales (Ya validadas) ---"
+	@echo "--- [FASE 1] Reparaciones Estructurales ---"
 	-grep -q "typedef struct HINSTANCE__" ../libraries/kali/app.h || sed -i 's/typedef HINSTANCE__ Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
 	-grep -q "((char*&)" ../libraries/kali/runtime.h || sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
 	-grep -q "string(\"%s\"" ../libraries/win/kali/window.h || sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
 	-grep -q "//#define DBG" ../libraries/kali/dbgutils.h || sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
 	
-	@echo "--- [FASE 2] Reparaciones de Templates (El nudo gordiano) ---"
-	# Correccion en SP Coefficients
+	@echo "--- [FASE 2] Reparaciones de Templates (Coefficients & Widgets) ---"
 	-grep -q "typedef typename T::Type V;" ../libraries/sp/coefficients.h || sed -i 's/typedef T::Type V;/typedef typename T::Type V;/g' ../libraries/sp/coefficients.h
-	
-	# Correccion en Widgets (Typename en typedef - PASO ANTERIOR)
 	-grep -q "typedef typename T::Type Widget;" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/typedef T::Type Widget;/typedef typename T::Type Widget;/g' ../libraries/win/kali/ui/native/widgets.h
-	
-	# Correccion en Widgets (Typename en declaracion de variable - ERROR ACTUAL)
-	# Esta linea soluciona el error de Widget::Handle handle
 	-grep -q "typename Widget::Handle handle" ../libraries/win/kali/ui/native/widgets.h || sed -i 's/Widget::Handle handle/typename Widget::Handle handle/g' ../libraries/win/kali/ui/native/widgets.h
 
-	@echo "--- [FASE 3] Cirugia de Runtime (Int2Type - Validada) ---"
+	@echo "--- [FASE 3] Cirugia de Runtime (Int2Type) ---"
 	-grep -q "struct I2T" ../libraries/kali/runtime.h || sed -i '/namespace kali {/a template<int N> struct I2T { enum { v = N }; };' ../libraries/kali/runtime.h
 	-grep -q "void _(I2T" ../libraries/kali/runtime.h || sed -i 's/template <int i> static void _(int)/template <int i> static void _(I2T<i>)/g' ../libraries/kali/runtime.h
 	-grep -q "I2T<i+1>" ../libraries/kali/runtime.h || sed -i 's/ _<i+1>(0);/ _<i+1>(I2T<i+1>());/g' ../libraries/kali/runtime.h
 	-grep -q "static void _(I2T<Size>)" ../libraries/kali/runtime.h || sed -i 's/template <> static void _ <Size> (int) {}/static void _(I2T<Size>) {}/g' ../libraries/kali/runtime.h
 
-	@echo "--- [FASE 4] ADELANTAMIENTO (Prediccion de errores futuros) ---"
-	# PREVENCION: Kali Containers seguramente usa iteradores en templates.
-	# Esto fallara igual que widgets.h si no lo arreglamos ya.
+	@echo "--- [FASE 4] ADELANTAMIENTO (Containers) ---"
 	-grep -q "typedef typename T::iterator" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::iterator/typedef typename T::iterator/g' ../libraries/kali/containers.h
 	-grep -q "typedef typename T::Value" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::Value/typedef typename T::Value/g' ../libraries/kali/containers.h
-	-grep -q "typedef typename T::Type" ../libraries/kali/containers.h 2>/dev/null || sed -i 's/typedef T::Type/typedef typename T::Type/g' ../libraries/kali/containers.h
 
-	@echo "--- Codigo Blindado y Optimizado. Compilando... ---"
+	@echo "--- [FASE 5] EL NUEVO ERROR (App.Details) ---"
+	# Correccion del error actual: "instantiating erroneous template" en loadLayer
+	# 1. Agregamos typename a los typedefs dentro de app.details.h
+	-grep -q "typedef typename T::" ../libraries/win/kali/app.details.h || sed -i 's/typedef T::/typedef typename T::/g' ../libraries/win/kali/app.details.h
+	# 2. Corregimos el operador >> pegado en templates (error C++98 clasico)
+	-sed -i 's/Loaded<T>>/Loaded<T> >/g' ../libraries/win/kali/app.details.h
+
+	@echo "--- Codigo Completamente Reparado. Compilando... ---"
 
 # =============================================================================
 # COMPILACION

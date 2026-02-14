@@ -1,10 +1,8 @@
 # =============================================================================
-# MAKEFILE FINAL - C4 ANALYZER
-# Incluye parches automáticos para Kali Framework y SP Audio Lib
+# MAKEFILE FINAL - REPARACIÓN PROFUNDA
 # =============================================================================
 
 CXX      := g++
-# Flag Mágica: -fno-access-control (Permite acceder a miembros privados, vital para sa.editor.h)
 CXXFLAGS := -O2 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive -fno-access-control -w -D_WIN32_WINNT=0x0600 -DBUILDING_VST=1
 
 INC      := -I. \
@@ -19,23 +17,24 @@ LIBS     := -static-libgcc -static-libstdc++ -lgdi32 -luser32 -lcomdlg32 -lopeng
 
 OBJS     := vstsdk-wrapper.o sp.o main.res
 
-# Objetivo: Parchear todo -> Compilar DLL
-all: fix-all C4Analyzer.dll
+# OBJETIVO PRINCIPAL: Parches -> DLL
+all: repair-libraries C4Analyzer.dll
 
-# ZONA DE PARCHES
-fix-all:
-	@echo "--- Aplicando Parches ---"
-	# 1. Arreglar typo en kali/app.h (HINSTANCE__ es struct, no tipo directo)
+# --- ZONA DE PARCHES CRÍTICOS ---
+repair-libraries:
+	@echo "--- Reparando librerias Kali ---"
+	# 1. Arreglar typo en kali/app.h
 	-sed -i 's/typedef HINSTANCE__ Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
-	# 2. Arreglar punteros void en kali/runtime.h (Castear a char*)
+	# 2. Arreglar aritmética de punteros void en kali/runtime.h (La causa del error anterior)
 	-sed -i 's/\*dst++= \*src++;/*((char*\&)dst)++ = *((const char*\&)src)++;/g' ../libraries/kali/runtime.h
-	# 3. Arreglar ambigüedad en window.h
+	# 3. Arreglar ambigüedad en window.h (Usamos formato explícito)
 	-sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
-	# 4. Arreglar typename en analyzer.h
+	# 4. Eliminar macro DBG ilegal en dbgutils.h (Ya la definimos en main.h)
+	-sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
+	# 5. Arreglar typename en analyzer.h
 	-sed -i 's/Dst::T/typename Dst::T/g' analyzer.h
-	@echo "--- Parches Listos ---"
+	@echo "--- Reparación completada ---"
 
-# Linker con alias de exportación para main
 C4Analyzer.dll: $(OBJS)
 	$(CXX) -shared -m32 -o $@ $(OBJS) $(LIBS) -Wl,--export-all-symbols -Wl,--kill-at -Wl,--defsym=main=VSTPluginMain
 

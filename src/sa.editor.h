@@ -1,4 +1,3 @@
-
 #ifndef SA_EDITOR_INCLUDED
 #define SA_EDITOR_INCLUDED
 
@@ -6,6 +5,15 @@
 #include "sa.settings.h"
 #include "sa.self-install.h"
 
+// ............................................................................
+// FIX: Definir DBG si no existe para evitar errores de compilacion
+#ifndef DBG
+#ifdef _DEBUG
+#define DBG 1
+#else
+#define DBG 0
+#endif
+#endif
 // ............................................................................
 
 namespace sa {
@@ -90,10 +98,6 @@ private:
 };
 
 // ............................................................................
-
-// FIXME: this (the "Settings/Colors/Prefs" window) *was* the VST editor window 
-// before 1.05, but now it's not so the name is misleading. Rename.
-// (I can't invent a suitable name right now though, hmm... "Confiburgurator"?)
 
 struct Editor : LayerBase
 {
@@ -183,7 +187,8 @@ struct Editor : LayerBase
 
     static void makeCombo(This* that, Ctor& ctor, int i)
     {
-        Combo master(ctor(i));
+        // FIX: Desreferenciar el resultado de ctor(i) para obtener el objeto Combo correcto
+        Combo master(*(Combo*)ctor(i));
         for (int v = 0; v <= that->settings.range(i); v++)
             master->add(that->settings.text(i, v));
         that->widget[i].ctor(&*master,
@@ -192,7 +197,8 @@ struct Editor : LayerBase
 
     static void makeToggle(This* that, Ctor& ctor, int i)
     {
-        Toggle master(ctor(i));
+        // FIX: Casting y desreferenciacion explicita
+        Toggle master(*(Toggle*)ctor(i));
         that->widget[i].ctor(&*master,
             &that->nullWidget, &*master);
     }
@@ -305,7 +311,8 @@ struct Editor : LayerBase
         {
             color[i] = ctor(i + colorTag);
             color[i]->callback.to(this, &This::colorChanged, i);
-            AnyWidget edit(ctor(i));
+            // FIX: Casting explicito para AnyWidget
+            AnyWidget edit(*(AnyWidget*)ctor(i));
             edit->enable(*settings.unit(i + ColorsIndex) == 'a');
             opacity[i].ctor(ctor(i + stepperTag), edit, ctor(i + labelTag));
             opacity[i].range(100);
@@ -520,15 +527,15 @@ private:
     };
 
     sa::Shared&  shared;
-    Settings     settings;
-    LayerTabs    tabs;
-    Button       saveAsDefault;
-    Combo        scheme;
-    Compound     widget  [SettingsCount];
-    ColorWell    color   [ColorsCount];
-    Compound     opacity [ColorsCount];
-    Toggle       pref    [PrefCount];
-    NullWidget   nullWidget;
+    Settings      settings;
+    LayerTabs     tabs;
+    Button        saveAsDefault;
+    Combo         scheme;
+    Compound      widget  [SettingsCount];
+    ColorWell     color   [ColorsCount];
+    Compound      opacity [ColorsCount];
+    Toggle        pref    [PrefCount];
+    NullWidget    nullWidget;
 
     enum
     {

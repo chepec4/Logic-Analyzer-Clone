@@ -32,12 +32,10 @@ TARGET   := C4Analyzer.dll
 all: fix-libraries $(TARGET)
 
 # =============================================================================
-# ZONA DE PARCHES DE LIBRERIAS (KALI)
-# Nota: Ya no se parchea src/ (analyzer o editor) porque el codigo fuente 
-# fue corregido manualmente. Solo tocamos las librerias externas.
+# ZONA DE PARCHES DE LIBRERIAS (KALI y SP)
 # =============================================================================
 fix-libraries:
-	@echo "--- Verificando integridad de librerias Kali ---"
+	@echo "--- Verificando integridad de librerias Kali y SP ---"
 	# 1. Arreglar typo en Kali App (struct faltante)
 	-sed -i 's/typedef HINSTANCE__ Module;/typedef struct HINSTANCE__ Module;/g' ../libraries/kali/app.h
 	# 2. Arreglar aritmetica de punteros void* en Kali Runtime
@@ -46,6 +44,8 @@ fix-libraries:
 	-sed -i 's/!comments ? text/!comments ? string("%s", text)/g' ../libraries/win/kali/window.h
 	# 4. Eliminar redefinicion ilegal de DBG
 	-sed -i 's/#define DBG (defined(_DEBUG))/\/\/#define DBG (defined(_DEBUG))/g' ../libraries/kali/dbgutils.h
+	# 5. Arreglar Template Erroneo en SP Coefficients (Falta typename)
+	-sed -i 's/typedef T::Type V;/typedef typename T::Type V;/g' ../libraries/sp/coefficients.h
 	@echo "--- Librerias listas ---"
 
 # =============================================================================

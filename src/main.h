@@ -1,4 +1,3 @@
-
 #ifndef PLUGIN_INCLUDED
 #define PLUGIN_INCLUDED
 
@@ -61,7 +60,10 @@ struct Plugin :
     template <typename T> inline_
     void process(const T* const* in, T* const* out, int n)
     {
+        // 1. Bypass (copia directa si es necesario)
         bypass(in, out, n);
+        
+        // 2. Procesa el análisis (C4 Engine)
         int ch = shared.settings
             (sa::settings::inputChannel);
         analyzer.process(in, n, ch);
@@ -135,12 +137,20 @@ struct Plugin :
         this->invalidatePreset();
     }
 
+    // ------------------------------------------------------------------------
+    // C4 ANALYZER - IDENTIDAD DEL PLUGIN
+    // ------------------------------------------------------------------------
     enum
     {
-        UniqueID = 'SPhA',
+        // C4: ID Único generado para evitar conflictos con el original.
+        // Hex: 43 34 41 6E -> "C4An"
+        UniqueID = 'C' << 24 | '4' << 16 | 'A' << 8 | 'n', 
+        
+        // La versión se toma de version.h
         Version  = int(VERSION * 1000),
     };
 
+    // C4: El nombre y la compañía vienen de las macros en version.h
     static const char* name()   {return NAME;}
     static const char* vendor() {return COMPANY;}
 
@@ -162,7 +172,7 @@ struct Plugin :
     {
         tf
         this->setNumInputs(2);
-	    this->setNumOutputs(2);
+        this->setNumOutputs(2);
         #if PROCESS_DBL
             this->canDoubleReplacing();
         #endif

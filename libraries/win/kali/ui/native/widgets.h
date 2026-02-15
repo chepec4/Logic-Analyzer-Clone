@@ -1,8 +1,25 @@
 #ifndef KALI_UI_NATIVE_WIDGETS_INCLUDED
 #define KALI_UI_NATIVE_WIDGETS_INCLUDED
 
-// VALIDACIÓN: Pre-declaramos el namespace para evitar el error "huevo o gallina"
-namespace kali { namespace ui { namespace native { namespace widget { struct Interface; } } } }
+// [FIX 1] PRE-DECLARACIÓN COMPLETA
+// Esto evita que native.h falle al no encontrar estos tipos.
+namespace kali { namespace ui { namespace native { namespace widget { 
+    struct Interface; 
+    struct Combo;
+    struct Toggle;
+    struct Button;
+    struct LayerTabs;
+    struct ColorWell;
+    struct TextRight;
+    struct TextCopy;
+    struct Toolbar;
+    struct Stepper;
+    struct Fader;
+    struct Meter;
+    struct Break;
+    struct Edit;
+    struct Text;
+} } } }
 
 #include "kali/ui/native.h"
 #include "kali/ui/native/widgets.base.h"
@@ -18,12 +35,11 @@ struct ResourceCtor
 {
     struct Aux
     {
-        Window::Handle handle;
+        Window::Handle handle; // Ahora funciona porque Window::Handle está definido
 
         Aux(Window::Handle h) : handle(h) {}
 
-        // VALIDACIÓN: Estos operadores DEBEN ser públicos.
-        // Si fueran privados, el Editor no podría crear los botones y combos.
+        // Operadores PÚBLICOS
     public:
         template <typename T> operator T () const { return (T)handle; }
         template <typename T> operator T* () const { return (T*)handle; }
@@ -39,8 +55,7 @@ struct ResourceCtor
 };
 
 // ............................................................................
-// Definiciones completas de los Widgets
-// Se asegura la compatibilidad con los mensajes de Windows (SendMessage)
+// WIDGETS REALES
 // ............................................................................
 
 struct Combo : Interface {
@@ -78,11 +93,29 @@ struct Button : Interface {
     }
 };
 
-// Stubs para completar los tipos requeridos por native.h y evitar errores de "tipo incompleto"
+// [FIX 2] Definiciones STUB para completar los tipos faltantes
 struct Edit : Interface { static const char* class_() { return "EDIT"; } };
 struct Text : Interface { static const char* class_() { return "STATIC"; } };
 struct TextRight : Interface { static const char* class_() { return "STATIC"; } };
 struct LayerTabs : Interface { static const char* class_() { return "SysTabControl32"; } }; 
+struct Toolbar : Interface { static const char* class_() { return "ToolbarWindow32"; } };
+struct Stepper : Interface { static const char* class_() { return "BUTTON"; } }; // Simplificación
+struct Fader : Interface { static const char* class_() { return "STATIC"; } };
+struct Meter : Interface { static const char* class_() { return "STATIC"; } };
+struct Break : Interface { static const char* class_() { return "STATIC"; } };
+struct TextCopy : Interface { static const char* class_() { return "STATIC"; } };
+
+// [FIX 3] Estructura especial para ColorWell
+struct ColorWell : Interface { 
+    static const char* class_() { return "STATIC"; }
+    // Soporte para la propiedad estática 'Type::custom' que usa el editor
+    struct Type {
+        static int& custom(int i) { 
+            static int storage[32]; // Almacenamiento simple
+            return storage[i]; 
+        }
+    };
+};
 
 // ............................................................................
 

@@ -1,6 +1,10 @@
 #ifndef KALI_UI_NATIVE_WIDGETS_INCLUDED
 #define KALI_UI_NATIVE_WIDGETS_INCLUDED
 
+// PRE-DECLARACIÓN CRÍTICA:
+// native.h necesita saber que 'widget' existe.
+namespace kali { namespace ui { namespace native { namespace widget { struct Interface; } } } }
+
 #include "kali/ui/native.h"
 #include "kali/ui/native/widgets.base.h"
 
@@ -9,10 +13,6 @@ namespace ui {
 namespace native {
 namespace widget {
 
-// ............................................................................
-// ResourceCtor: Estructura crítica para la creación de la interfaz
-// REPARACIÓN: Los operadores de conversión DEBEN ser públicos para que 
-// el casting en sa.editor.h funcione correctamente.
 // ............................................................................
 
 struct ResourceCtor
@@ -23,7 +23,7 @@ struct ResourceCtor
 
         Aux(Window::Handle h) : handle(h) {}
 
-        // --- SECCIÓN PÚBLICA (Corregida para el build de GitHub) ---
+        // MOVIDO A PUBLIC PARA QUE sa.editor.h COMPILE
     public:
         template <typename T> 
         operator T () const 
@@ -31,7 +31,6 @@ struct ResourceCtor
             return (T)handle; 
         }
 
-        // Operador especializado para punteros de widgets kali
         template <typename T>
         operator T* () const
         {
@@ -49,20 +48,48 @@ struct ResourceCtor
 };
 
 // ............................................................................
-// Definiciones de Widgets Estándar
-// ............................................................................
 
 struct Combo : Interface {
     static const uint32_t style_ = CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP;
     static const char* class_() { return "COMBOBOX"; }
-    // ... resto de la implementación ...
+    
+    // Implementación mínima necesaria para Combo
+    void add(const char* text) { SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)text); }
+    void clear() { SendMessage(handle, CB_RESETCONTENT, 0, 0); }
+    int  value() const { return SendMessage(handle, CB_GETCURSEL, 0, 0); }
+    void value(int v) { SendMessage(handle, CB_SETCURSEL, v, 0); }
+    
+    // Necesario para sa.editor.h:
+    void ctor(const Window* parent, const Rect& r) { Interface::create(parent, r, style_, 0, class_()); }
+    void ctor(const Window* parent, int id) { handle = GetDlgItem(*parent, id); }
 };
 
 struct Toggle : Interface {
     static const uint32_t style_ = BS_AUTOCHECKBOX | WS_TABSTOP;
     static const char* class_() { return "BUTTON"; }
-    // ... resto de la implementación ...
+    
+    int  value() const { return SendMessage(handle, BM_GETCHECK, 0, 0); }
+    void value(int v) { SendMessage(handle, BM_SETCHECK, v, 0); }
+    
+    void ctor(const Window* parent, const Rect& r, const char* text = 0) { 
+        Interface::create(parent, r, style_, 0, class_(), text); 
+    }
+    void ctor(const Window* parent, int id) { handle = GetDlgItem(*parent, id); }
 };
+
+struct Button : Interface {
+    static const uint32_t style_ = BS_PUSHBUTTON | WS_TABSTOP;
+    static const char* class_() { return "BUTTON"; }
+    
+    void ctor(const Window* parent, const Rect& r, const char* text = 0) { 
+        Interface::create(parent, r, style_, 0, class_(), text); 
+    }
+};
+
+// Definición de tipos genéricos que faltaban en mi versión anterior
+struct Edit : Interface { static const char* class_() { return "EDIT"; } };
+struct Text : Interface { static const char* class_() { return "STATIC"; } };
+struct TextRight : Interface { static const char* class_() { return "STATIC"; } };
 
 // ............................................................................
 

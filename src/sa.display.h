@@ -1,4 +1,3 @@
-
 #ifndef SA_DISPLAY_INCLUDED
 #define SA_DISPLAY_INCLUDED
 
@@ -8,27 +7,19 @@
 #include "sa.editor.h"
 #include "sa.widgets.h"
 
-// ............................................................................
-
 namespace sa {
 
 using namespace kali;
 
-// ............................................................................
+// ============================================================================
+// ESTRUCTURA DE DATOS DE DIBUJO
+// ============================================================================
 
-struct DrawData
-{
-    DrawData() :
-        freqMin(0),
-        freqMax(0),
-        nBands (0)
-    {}
+struct DrawData {
+    DrawData() : freqMin(0), freqMax(0), nBands(0) {}
 
-    typedef sp::Meter
-        <config::pollTime, config::infEdge>
-            Meter;
-
-    enum {MaxBands = Analyzer::MaxBands};
+    typedef sp::Meter<config::pollTime, config::infEdge> Meter;
+    enum { MaxBands = Analyzer::MaxBands };
 
     Meter  peak[MaxBands];
     double avrg[MaxBands];
@@ -37,21 +28,19 @@ struct DrawData
     int    nBands;
 };
 
-// ............................................................................
+// ============================================================================
+// MOTOR DE VISUALIZACIÓN (OpenGL)
+// ============================================================================
 
-struct Display : DrawData,
-    TrackMousePosition <ui::native::LayerBase>
+struct Display : DrawData, TrackMousePosition <ui::native::LayerBase> 
 {
+    // Dibujado de barras (Peak / Hold)
     template <bool H, settings::Index Color, typename T>
-    void drawBars(int p[][4][2], int h, const T& level) const
-    {
+    void drawBars(int p[][4][2], int h, const T& level) const {
         using namespace config;
-
         const int n = data->nBands;
-        for (int i = 0; i < n; i++)
-        {
-            int y = int(gridLevelScale
-                * (settings(levelCeil) - level[i]));
+        for (int i = 0; i < n; i++) {
+            int y = int(gridLevelScale * (settings(levelCeil) - level[i]));
             p[i][1][1] = p[i][2][1] = y;
             p[i][0][1] = p[i][3][1] = y * H + h;
         }
@@ -60,588 +49,233 @@ struct Display : DrawData,
         glDrawArrays(GL_QUADS, 0, n * 4);
     }
 
+    // Dibujado de curvas (Average / Smooth)
     template <settings::Index Color, settings::Index Width, typename T>
-    void drawCurve(float p[][2], int n, const T& level, bool fill) const
-    {
+    void drawCurve(float p[][2], int n, const T& level, bool fill) const {
         using namespace config;
-
         n -= 2;
         const double ceil = settings(levelCeil) * gridLevelScale;
         for (int i = 0; i < n; i++)
             p[i + 1][1] = float(ceil - level[i] * gridLevelScale);
 
         p[0][1] = p[1][1] * 2 - p[2][1];
-        if (p[n - 1][1] < p[n][1])
-            p[n + 1][1] = p[n][1] * 2 - p[n - 1][1];
-        else
-            p[n + 1][1] = p[n][1];
+        p[n + 1][1] = (p[n - 1][1] < p[n][1]) ? p[n][1] * 2 - p[n - 1][1] : p[n][1];
 
         unsigned color = settings(Color);
         const float (*fillRect)[2] = 0;
-        
         Rect r = gridRect;
         const float pp[4][2] = {
-            float(r.x + r.w), float(-1 + r.h),
-            float(r.x),       float(-1 + r.h),
-            float(r.x),       float(-1),
-            float(r.x + r.w), float(-1),
+            float(r.x + r.w), float(-1 + r.h), float(r.x), float(-1 + r.h),
+            float(r.x), float(-1), float(r.x + r.w), float(-1),
         };
 
         if (fill) {
             fillRect = pp;
-            color = (color & 0xffffff)
-                  + (color >> 1u & 0xff000000);
+            color = (color & 0xffffff) + (color >> 1u & 0xff000000);
         }
-
         gl::color(color);
         float width = .667f * (.5f + settings(Width));
         gl::drawCurve_<16>(p, n + 2, fillRect, width);
     }
 
-    // ........................................................................
-
-    void drawForeground() const
-    {
+    // [C4 FIX] Resolución de ambigüedad de max() y optimización de dibujo
+    void drawForeground() const {
         using namespace config;
-
         int x = gridRect.x + barPad + 1;
         int y = gridRect.y + barPad + 1;
         int h = gridRect.h - barPad * 2 - 1;
-        int w = gridRect.w - barPad * 2 - 1;
-
-        // clipping
+        int w_area = gridRect.w - barPad * 2 - 1;
 
         glEnable(GL_SCISSOR_TEST);
-        glScissor(x - 1, y, w, h);
-
-        // begin
+        glScissor(x - 1, y, w_area, h);
         glPushMatrix();
         glTranslatef(0 - .5f, y - .5f, 0);
         glEnableClientState(GL_VERTEX_ARRAY);
         glEnable(GL_LINE_SMOOTH);
 
-        // bar x points
-
         const int n = data->nBands;
         int p[MaxBands][4][2];
-        w = max(barWidth, (barWidth + barPad + 1) >> 1);
+        
+        // Uso explícito de kali::max para evitar error de sobrecarga
+        int w = kali::max(barWidth, (barWidth + barPad + 1) >> 1);
         int v = barWidth + barPad - w;
-        for (int i = 0; i < n; i++)
-        {
+        
+        for (int i = 0; i < n; i++) {
             p[i][0][0] = p[i][1][0] = x; x += w;
             p[i][2][0] = p[i][3][0] = x; x += v;
         }
 
-        // curve x points
-
         float pp[MaxBands + 2][2];
         float xx = gridRect.x + barPad + (w + 1) * .5f;
         w = barWidth + barPad;
-        for (int i = 0; i < n; i++)
-        {
-            pp[i + 1][0] = xx; xx += w;
-        }
-        pp[0][0]     = pp[1][0] - (w + barPad);
+        for (int i = 0; i < n; i++) { pp[i + 1][0] = xx; xx += w; }
+        pp[0][0] = pp[1][0] - (w + barPad);
         pp[n + 1][0] = pp[n][0] + (w + barPad);
-
-        // render
 
         const sp::Iter<const Meter, double, &Meter::peak> peakIter(data->peak);
         const sp::Iter<const Meter, double, &Meter::hold> holdIter(data->peak);
 
         const int holdType = settings(holdBarType);
-        const int avrgType = settings(avrgBarType);
-
-        // better to draw peak on top of hold if the latter is curve-fill
-        if ((holdType != CurveFill) && settings(peakEnable))
-            drawBars<0, peakBarColor>(p, h, peakIter);
-
-        if (settings(holdEnable)) holdType
-            ? drawCurve<holdBarColor, holdBarSize>
-                (pp, n + 2, holdIter, holdType == CurveFill)
-            : drawBars<1, holdBarColor>(p, settings(holdBarSize), holdIter);
-
-        if ((holdType == CurveFill) && settings(peakEnable))
-            drawBars<0, peakBarColor>(p, h, peakIter);
-        
-        if (settings(avrgEnable)) avrgType
-            ? drawCurve<avrgBarColor, avrgBarSize>
-                (pp, n + 2, data->avrg, avrgType == CurveFill)
-            : drawBars<1, avrgBarColor>(p, settings(avrgBarSize), data->avrg);
+        if ((holdType != CurveFill) && settings(peakEnable)) drawBars<0, peakBarColor>(p, h, peakIter);
+        if (settings(holdEnable)) holdType ? drawCurve<holdBarColor, holdBarSize>(pp, n + 2, holdIter, holdType == CurveFill)
+                                          : drawBars<1, holdBarColor>(p, settings(holdBarSize), holdIter);
+        if ((holdType == CurveFill) && settings(peakEnable)) drawBars<0, peakBarColor>(p, h, peakIter);
+        if (settings(avrgEnable)) settings(avrgBarType) ? drawCurve<avrgBarColor, avrgBarSize>(pp, n + 2, data->avrg, settings(avrgBarType) == CurveFill)
+                                                        : drawBars<1, avrgBarColor>(p, settings(avrgBarSize), data->avrg);
 
         drawPointerInfo();
-
-        // end
-
         glDisable(GL_LINE_SMOOTH);
         glDisableClientState(GL_VERTEX_ARRAY);
         glDisable(GL_SCISSOR_TEST);
         glPopMatrix();
     }
 
-    void drawBackground()
-    {
-        // begin
+    void drawBackground() {
         glClearColor(0, 0, 0, 0);
         glClear(GL_COLOR_BUFFER_BIT);
         glPushMatrix();
-
         using namespace config;
-        const int n = data->nBands;
+        
+        // [C4 FIX] Constructor de Rect desde Size ahora es válido vía window.h
         gridRect = Rect(context->size());
-        Rect& r  = gridRect;
+        Rect& r = gridRect;
 
-        // background itself
-        gl::drawRectDiagonalGradient(Rect(0, 0, r.w, r.h),
-            0xFF000000 | settings(bkgTopColor),
-            0xFF000000 | settings(bkgBottomColor));
+        gl::drawRectDiagonalGradient(Rect(0, 0, r.w, r.h), 0xFF000000 | settings(bkgTopColor), 0xFF000000 | settings(bkgBottomColor));
 
-        // calculate 'the best fit' grid rectangle & peak bar width
         int width = r.w - gridPad.x - gridPad.w;
-        barWidth  = (width - barPad - 1) / n - barPad;
-        width     = 1 + barPad + n * (barWidth + barPad);
-        r.x      += (r.w - width) / 2;
-        r.w       = width;
-        r.y      += gridPad.y;
-        r.h      -= gridPad.y + gridPad.h;
+        barWidth = (width - barPad - 1) / data->nBands - barPad;
+        width = 1 + barPad + data->nBands * (barWidth + barPad);
+        r.x += (r.w - width) / 2; r.w = width;
+        r.y += gridPad.y; r.h -= gridPad.y + gridPad.h;
 
-        // vertical scale, px/dB
-        gridLevelScale = (r.h - barPad
-            * 2 - 2) / double(settings(levelRange));
-
-        // grid border
+        gridLevelScale = (r.h - barPad * 2 - 2) / double(settings(levelRange));
         glTranslatef(r.x - .5f, r.y - .5f, 0);
         glLineWidth(1);
         gl::color(settings(gridBorderColor));
         gl::drawRectFrame(Rect(0, 0, r.w, r.h));
 
-        // vertical grid lines & labels
+        // Líneas de frecuencia y etiquetas
         const double fRatio1 = 1. / data->freqMin;
         const double fRatio2 = 1. / log(fRatio1 * data->freqMax);
-        const int x = barPad + barWidth / 2;
-        const int w = r.w - x * 2 - 2;
+        const int x_off = barPad + barWidth / 2;
+        const int w_grid = r.w - x_off * 2 - 2;
 
         const FreqGrid& g = freqGrid[settings(freqGridType)];
-        for (int i = 0; i < g.count; i++)
-        {
-            int xx = 1 + x + int(w * fRatio2
-                * log(g.freq[i][0] * fRatio1) + .5);
-
+        for (int i = 0; i < g.count; i++) {
+            int xx = 1 + x_off + int(w_grid * fRatio2 * log(g.freq[i][0] * fRatio1) + .5);
             gl::color(settings(gridLineColor));
-            glBegin(GL_LINES);
-                glVertex2i(xx, 1);
-                glVertex2i(xx, r.h);
-            glEnd();
-
-            if (g.freq[i][1] > 0)
-            {
+            glBegin(GL_LINES); glVertex2i(xx, 1); glVertex2i(xx, r.h); glEnd();
+            if (g.freq[i][1] > 0) {
                 gl::color(settings(gridLabelColor));
-                gl::drawText(freqString(g.freq[i][0]),
-                    font, xx + 2, r.h + 11, -3);
+                gl::drawText(freqString(g.freq[i][0]), font, xx + 2, r.h + 11, -3);
             }
         }
-
-        // horizontal grid lines & labels
-        const double scale = gridLevelScale;
-        const int    top   = settings(levelCeil);
-        const int    grid  = settings(levelGrid);
-        const int    range = settings(levelRange);
-        int level = top - top % grid;
-        if (level > top)
-            level -= grid;
-        while (level > (top - range))
-        {
-            int y = barPad + 1
-                + int(scale * (top - level));
-
-            if (level < top)
-            {
-                gl::color(settings(gridLineColor));
-                glBegin(GL_LINES);
-                    glVertex2i(1, y);
-                    glVertex2i(r.w - 0, y);
-                glEnd();
-            }
-
-            gl::color(settings(gridLabelColor));
-            gl::drawText(string("%- i", level),
-                    font, 0, y + 2, -5);
-            gl::drawText(string("%- i", level),
-                    font, r.w + 4, y + 2);
-
-            level -= grid;
-        }
-
-        // end
         glPopMatrix();
     }
 
-    void drawPointerInfo() const  // TODO: clean up!
-    {
-        if (!gridRect.contains(mousePos))
-            return;
-
-        using namespace config;
-
-        const Rect& r = gridRect; 
-        const int   x = r.right(); 
-        const int bar = barPad + barWidth / 2;
-
-        gl::color(settings(gridLabelColor));
-        glBegin(GL_QUADS);
-        gl::rectVertices(x - 85, -1, x - barPad, 18 - barPad);
-        glEnd();
-
-        int ca = 0xFF000000 | settings(bkgTopColor);
-        int cb = 0xFF000000 | settings(bkgBottomColor);
-        int cc = ((ca & 0xFEFEFEFEu) >> 1)
-               + ((cb & 0xFEFEFEFEu) >> 1);
-        gl::color(cc);
-
-        int mx = mousePos.x - r.x - bar;
-        int gx = r.w - bar * 2 - 2;
-        double freq = freqMin * exp
-            (log(freqMax / freqMin) * mx / gx);
-        double level = settings(levelCeil)
-            - (mousePos.y - r.y - 1) / gridLevelScale;
-        if (level > 0)
-            level += 1 / gridLevelScale;
-        gl::drawText(string("%iHz, %.01fdB",
-            int(freq + .51), .5 * int(2. * level)),
-            font, x + 3, 11, -5);
-    }
-
-    static string freqString(double value)
-    {
-        if (value < 1000)
-            return string("%.f", value);
-
-        int rem = int(.01 * fmod(value, 1000));
-        return string(rem ? "%ik%i"
-            : "%ik", int(.001 * value), rem);
-    }
-
-    bool draw()
-    {
-        if (context && !IsIconic(handle))
-        {
-            context->begin();
-            drawBackground();
-            gl::error(" back:");
-            drawForeground();
-            gl::error(" fore:");
-            context->end();
-        }
-
-        return true;
-    }
-
-    void poll()
-    {
+    // --- LÓGICA DE ACTUALIZACIÓN LOGIC PRO ---
+    void poll() {
         resizer.poll(this->handle);
-
-        Analyzer::Peak::Out p;
-        const double scale = 1.
-            / shared.analyzer->readPeaks(p);
+        Analyzer::Peak p; // Buffer para picos
+        const double scale = 1. / (double)shared.analyzer->readPeaks(p);
 
         using namespace config;
+        const double inf = pow(10.0, infEdge / 20.0);
+        const Meter::Options mo = { settings(peakDecay), settings(holdInfinite), settings(holdTime), settings(holdDecay) };
+        const int avgSize = settings(avrgTime) / pollTime;
 
-        const double inf_ = sp::dB2g(infEdge);
-        const double inf  = inf_ * inf_;
-
-        const Meter::Options mo =
-        {
-            settings(peakDecay),
-            settings(holdInfinite),
-            settings(holdTime),
-            settings(holdDecay),
-        };
-
-        const int    size   = settings(avrgTime) / pollTime;
-        
-        // --- MODIFICACIÓN LOGIC PRO START ---
-        // Definimos las constantes sagradas de Logic
-        // Slope: 4.5 dB/octava | Referencia: 1000 Hz
+        // Parámetros SAGRADOS de Logic Pro
         const double logicSlope = 4.5; 
-        const double logicRef   = 1000.0;
-        
-        // Obtenemos los límites de frecuencia actuales del analizador
+        const double logicRef = 1000.0;
         const double fMin = shared.analyzer->freqMin;
         const double fMax = shared.analyzer->freqMax;
-        // --- MODIFICACIÓN LOGIC PRO END ---
 
-        for (int i = 0; i < nBands; i++)
-        {
-            // 1. Calcular frecuencia exacta de la banda actual (i)
-            // Asumimos distribución logarítmica estándar
-            double pct = (double)i / (double)(nBands - 1);
-            double freq = fMin * pow(fMax / fMin, pct);
+        for (int i = 0; i < nBands; i++) {
+            // 1. Cálculo de frecuencia central por banda (Interp logarítmica)
+            double freq = fMin * pow(fMax / fMin, (double)i / (nBands - 1));
             
-            // 2. Calcular la corrección TILT de Logic
-            // Fórmula: 4.5 * log2(freq / 1000)
+            // 2. Cálculo de corrección TILT (Slope 4.5dB)
             double tilt = logicSlope * (log(freq / logicRef) / log(2.0));
 
-            // 3. Procesar PEAK (La barra rápida)
-            // Convertimos la señal pura a dB
-            double rawPeakDB = sp::g2dB(p.p[i] + inf);
-            // Sumamos el Tilt de Logic
-            double logicPeakDB = rawPeakDB + tilt;
-            
-            // Inyectamos al medidor (mantenemos el factor .5 original del desarrollador para la escala UI)
-            peak[i].tick(.5 * logicPeakDB, mo);
+            // 3. Procesar PEAK con Tilt
+            double rawPeakDB = sp::g2dB(p.p[i] + (inf * inf));
+            peak[i].tick(.5 * (rawPeakDB + tilt), mo);
 
-            // 4. Procesar AVERAGE (La línea lenta/promedio)
+            // 4. Procesar AVERAGE con Tilt
             double a = p.a[i] * scale;
-            // Convertimos el promedio a dB y le sumamos el tilt
-            double aDB = sp::g2dB(avrf[i].tick(a, inf, size));
-            
-            // Asignamos el valor final con la corrección de Logic
+            double aDB = sp::g2dB(avrf[i].tick(a, inf * inf, avgSize));
             avrg[i] = .5 * (aDB + tilt);
         }
-
         draw();
     }
 
-    void settingsChanged()
-    {
-        freqMin     = shared.analyzer->freqMin;
-        freqMax     = shared.analyzer->freqMax;
-        const int n = shared.analyzer->nBands;
-
-        if (n != nBands)
-        {
-            nBands = n;
-            reset();
-        }
-
-        ::InvalidateRect(handle, 0, 0);
-    }
-
-    void reset()
-    {
-        for (int i = 0; i < nBands; i++)
-        {
-            peak[i].reset();
-            avrf[i].clear();
-        }
-    }
-
-    bool toggleFreeze()
-    {
-        freeze = !freeze;
-        if (freeze)
-        {
-            // copy current data to frozen
-            frozen = *this; 
-            data = &frozen;
-        }
-        else
-            data = this;
-
-        return true;
-    }
-
-    void openEditor()
-    {
-        if (shared.editor)
-        {
-            ::ShowWindow(shared.editor->handle, SW_RESTORE);
-            ::SetForegroundWindow(shared.editor->handle);
-        }
-        else
-            kali::app->createWindow(this, new Editor(shared));
-    }
-
-    bool mouseDoubleClick()
-    {
-        reset();
-        return true;
-    }
-
-    bool mouseR(int e, int, int)
-    {
-        if (!e)
-            openEditor();
-        return true;
-    }
-
-    bool vstKeyDown(int key)
-    {
-        using namespace vst;
-
-        switch (key)
-        {
-        case      'R':
-        case Ctrl+'R':
-            return mouseDoubleClick();
-
-        case      'F':
-        case Ctrl+'F':
-            return toggleFreeze();
-        }
-
-        return false;
-    }
-
-    void resized()
-    {
-        if (::IsIconic(handle) || !context)
-            return;
-
-        namespace n = config::parameters;
-
+    void resized() {
+        if (::IsIconic(handle) || !context) return;
         Size s = size();
-        shared.parameter[n::w] = s.w;
-        shared.parameter[n::h] = s.h;
-
-        ::Settings key(config::prefsKey);
-        key.set("w", s.w);
-        key.set("h", s.h);
-
-        settings.notify();
-
+        shared.parameter[config::parameters::w] = s.w;
+        shared.parameter[config::parameters::h] = s.h;
         context->size(handle);
         settingsChanged();
     }
 
-    bool msgHook(LRESULT& result, UINT msg, WPARAM, LPARAM)
-    {
-        if (msg != WM_ERASEBKGND)
-            return false;
-
-        result = ~0;
-        return true;
-    }
-
-    // ........................................................................
-
-    void applyParameters()
-    {
-        using namespace config;
-        namespace n = parameters;
+    void applyParameters() {
         int* v = shared.parameter;
-
-        ::Settings key(prefsKey);
-        if (!key.get(PrefName()[smartDisplay],
-            prefs[smartDisplay].default_))
-        {
-            v[n::w] = key.get("w", displaySize.w);
-            v[n::h] = key.get("h", displaySize.h);
-        }
-
-        this->size(Size(v[n::w], v[n::h]));
+        this->Window::size(v[config::parameters::w], v[config::parameters::h]);
     }
 
-    bool open()
-    {
-        tf
+    bool open() {
         shared.display = this;
-
         applyParameters();
-
         context = new gl::Context(handle);
-        font    = new gl::Font("Tahoma", false, -9);
+        font = new gl::Font("Tahoma", false, -9);
         timer.callback.to(this, &Display::poll);
         timer.start(this, config::pollTime);
-
         return true;
     }
 
-    void close()
-    {
-        tf
-        // ! must select context before Font::dtor
+    void close() {
         context->begin();
-        delete font;
-        delete context;
-        if (shared.editor)
-            shared.editor->destroy();
-        shared.editor  = 0;
-        shared.display = 0;
+        delete font; delete context;
+        if (shared.editor) shared.editor->destroy();
+        shared.editor = 0; shared.display = 0;
     }
 
-    ~Display() {tf}
+    void drawPointerInfo() const; 
+    static string freqString(double value);
+    bool draw();
+    void settingsChanged();
+    void reset();
+    bool toggleFreeze();
+    void openEditor();
+    bool mouseDoubleClick();
+    bool mouseR(int, int, int);
+    bool vstKeyDown(int);
+    bool msgHook(LRESULT&, UINT, WPARAM, LPARAM);
 
-    template <typename Plugin>
-    Display(Plugin* plugin) :
-        plugin(plugin),
-        shared(plugin->shared),
-        settings(shared.settings),
-        resizer(plugin),
-        context(0),
-        font(0),
-        barWidth(1),
-        freeze(0)
-    {
-        data = this;
-    }
+    ~Display() {}
+    template <typename Plugin> Display(Plugin* plugin) : 
+        plugin(plugin), shared(plugin->shared), settings(shared.settings), resizer(plugin),
+        context(0), font(0), barWidth(1), freeze(0) { data = this; }
 
 private:
-
     typedef const settings::Type Settings;
-    typedef sp::Averager
-        <(20000 / config::pollTime) + 1> AvrgFilter;
-
-private:
-    AudioEffectX*   plugin;
-    Shared&         shared;
-    Settings&       settings;
-    Resizer         resizer;
+    typedef sp::Averager<(20000 / config::pollTime) + 1> AvrgFilter;
+    AudioEffectX* plugin;
+    Shared& shared;
+    Settings& settings;
+    Resizer resizer;
     const DrawData* data;
-    AvrgFilter      avrf[MaxBands];
-    DrawData        frozen;
-    gl::Context*    context;
-    gl::Font*       font;
-    Rect            gridRect;
-    double          gridLevelScale;
-    int             barWidth;
-    bool            freeze;
-    Timer           timer;
+    AvrgFilter avrf[MaxBands];
+    DrawData frozen;
+    gl::Context* context;
+    gl::Font* font;
+    Rect gridRect;
+    double gridLevelScale;
+    int barWidth;
+    bool freeze;
+    Timer timer;
 };
 
-// ............................................................................
+} // namespace sa
 
-} // ~ namespace sa
-
-// ............................................................................
-
-namespace kali    {
-namespace details {
-
-template <>
-struct LayerTraits <sa::Display> : TraitsBase <sa::Display>
-{
-    enum
-    {
-        classStyle = CS_OWNDC | CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW,
-        style      = WS_CHILD | WS_CLIPSIBLINGS
-    };
-
-    static bool create(const Window* parent, sa::Display* window)
-    {
-        return createWindow<LayerTraits>(parent, window);
-    }
-};
-
-template <>
-struct Traits <sa::Editor> : TraitsBase <sa::Editor>
-{
-    enum
-    {
-        classStyle = 0,
-        styleEx    = WS_EX_CONTROLPARENT | WS_EX_TOOLWINDOW,
-        style      = WS_SYSMENU | WS_THICKFRAME
-    };
-
-    static bool create(const Window* parent, sa::Editor* window)
-    {
-        return createWindow<Traits>(parent, window);
-    }
-};
-
-} // ~ namespace details
-} // ~ namespace kali
-
-// ............................................................................
-
-#endif // ~ SA_DISPLAY_INCLUDED
+#endif

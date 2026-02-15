@@ -1,31 +1,31 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (V4.0 - Template Depth Fix)
+# C4 ANALYZER - MAKEFILE (V5.0 - Extreme Infrastructure Fix)
 # Autor: C4 Productions
 # -----------------------------------------------------------------------------
 
 CXX      := g++
 
 # -----------------------------------------------------------------------------
-# FLAGS DE COMPILACIÓN
+# FLAGS DE COMPILACIÓN (Configuración para entornos de alta complejidad)
 # -----------------------------------------------------------------------------
-# -O2: Optimización de velocidad estándar.
-# -std=gnu++14: Estándar C++14 con extensiones GNU.
-# -fpermissive: Permite código legacy que no cumple estrictamente el estándar.
-# -w: Desactiva todos los warnings para limpiar la salida.
-# -msse -msse2: Habilita instrucciones SIMD (requerido por sp.h).
-# -ftemplate-depth=5000: [CRÍTICO] Aumenta el límite de recursión para Kali.
-# -Wno-narrowing: Evita errores de conversión de tipos en listas de inicialización.
-# -static-lib...: Enlazado estático para portabilidad (no requiere DLLs extra).
+# -O2: Optimización de rendimiento balanceada.
+# -std=gnu++14: Estándar C++14 con extensiones de GNU para compatibilidad.
+# -fpermissive: Ignora errores de conformidad estricta en código legacy.
+# -w: Silencia advertencias para procesar logs de error limpios.
+# -msse -msse2: Habilita el conjunto de instrucciones del procesador para sp.h.
+# -ftemplate-depth=10000: [CRÍTICO] Límite extremo para plantillas recursivas de Kali.
+# -Wno-narrowing: Permite conversiones de tipos que pierden precisión sin fallar.
+# -static-libgcc -static-libstdc++: Embebe las librerías para que el DLL sea portable.
 # -----------------------------------------------------------------------------
 CXXFLAGS := -O2 -std=gnu++14 -fpermissive -w -msse -msse2 \
-            -ftemplate-depth=5000 \
+            -ftemplate-depth=10000 \
             -Wno-narrowing \
             -static-libgcc -static-libstdc++ \
             -DNDEBUG -DWINDOWS_=1 -D__GTHREADS \
             -D_WIN32_WINNT=0x0600 
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN
+# RUTAS DE INCLUSIÓN (Mapa de dependencias)
 # -----------------------------------------------------------------------------
 INC      := -I. \
             -I../libraries \
@@ -36,12 +36,12 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x
 
 # -----------------------------------------------------------------------------
-# LIBRERÍAS DE WINDOWS (Linker)
+# LIBRERÍAS DEL SISTEMA (Enlazado de Windows)
 # -----------------------------------------------------------------------------
 LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid
 
 # -----------------------------------------------------------------------------
-# ARCHIVOS FUENTE Y OBJETIVOS
+# ARCHIVOS FUENTE Y OBJETIVO FINAL
 # -----------------------------------------------------------------------------
 SRCS     := main.cpp vstsdk-wrapper.cpp
 OBJS     := $(SRCS:.cpp=.o)
@@ -54,23 +54,22 @@ TARGET   := ../C4Analyzer.dll
 
 all: $(TARGET)
 
-# 1. Enlazado final (Creación del DLL)
-# -Wl,--kill-at: Obligatorio para exportar VSTPluginMain correctamente
+# 1. Enlazado final del VST DLL
 $(TARGET): $(OBJS) $(RES)
-	@echo [LINK] Ensamblando C4 Analyzer DLL...
+	@echo [LINK] Ensamblando binario final C4 Analyzer...
 	$(CXX) -shared -s -o $@ $(OBJS) $(RES) $(LIBS) -Wl,--kill-at,--subsystem,windows
 
-# 2. Compilación de C++
+# 2. Compilación de los módulos C++
 %.o: %.cpp
-	@echo [CXX] Compilando $<...
+	@echo [CXX] Procesando modulo: $<...
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# 3. Compilación de Recursos (Iconos y Versión)
+# 3. Compilación de Recursos (Iconos, Versión y Metadatos)
 $(RES): rc/main.rc
-	@echo [RC] Integrando recursos e identidad...
+	@echo [RC] Integrando recursos del sistema...
 	windres $(INC) -Irc -i $< -O coff -o $@
 
-# Limpieza
+# 4. Limpieza del entorno de compilación
 clean:
 	rm -f $(OBJS) $(RES) $(TARGET)
 

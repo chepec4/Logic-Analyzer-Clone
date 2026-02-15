@@ -6,10 +6,12 @@
 #include "kali/dbgutils.h"
 #include "kali/atomic.h"
 #include "sp/sp.h"
+// [C4 FIX] Necesario para intrínsecos SSE (_mm_max_ps)
+#include <xmmintrin.h>
 
 struct Analyzer
 {
-    // Ruteo de canales (Mantiene lógica original)
+    // Ruteo de canales
     template <typename T> noalias_ inline_
     void process(const T* const* in, int samples, int channels) {
         enum { left, right, both, mix };
@@ -17,7 +19,7 @@ struct Analyzer
             case left:  return process<1, 0>(in + 0, samples);
             case right: return process<1, 0>(in + 1, samples);
             case mix:   return process<1, 1>(in + 0, samples);
-            case both:  return process<2, 0>(in,     samples);
+            case both:  return process<2, 0>(in,      samples);
         }
     }
 
@@ -33,8 +35,6 @@ struct Analyzer
         const int block = FrameSize;
         while (samples > 0) {
             const int m = block < samples ? block : samples;
-            // [C4 FIX] Cambiamos if constexpr por if normal para compatibilidad C++14 
-            // si no se actualiza el Makefile, o lo dejamos si actualizamos.
             if (Channels == 1) processFrame1ch<Mix>(in, m);
             else processFrame2ch(in, m);
             in[0] += m; in[1] += m;
@@ -56,13 +56,17 @@ struct Analyzer
                 m128 x = Filter::tick(input[0], b.z[0], b.k);
                 m128 y = interband(x, prev[0]);
                 prev[0] = x;
-                b.p = kali::max(b.p, y * y);
+                
+                // [C4 FIX] Uso directo de SSE en lugar de template kali::max
+                b.p = _mm_max_ps(b.p, y * y);
                 b.a = b.a + y * y;
 
                 x = Filter::tick(input[1], b.z[1], b.k);
                 y = interband(x, prev[1]);
                 prev[1] = x;
-                b.p = kali::max(b.p, y * y);
+                
+                // [C4 FIX] Uso directo de SSE
+                b.p = _mm_max_ps(b.p, y * y);
                 b.a = b.a + y * y;
             }
         }
@@ -82,7 +86,9 @@ struct Analyzer
                 m128 x = Filter::tick(input, b.z[0], b.k);
                 m128 y = interband(x, prev);
                 prev = x;
-                b.p = kali::max(b.p, y * y);
+                
+                // [C4 FIX] Uso directo de SSE
+                b.p = _mm_max_ps(b.p, y * y);
                 b.a = b.a + y * y;
             }
         }
@@ -96,9 +102,9 @@ struct Analyzer
     template <typename Dst>
     noalias_ inline_ int readPeaks(Dst& dst) {
         lock.lock();
-        // [C4 FIX] Typename obligatorio
-        typename Dst::T* p = (typename Dst::T*)&dst.p_;
-        typename Dst::T* a = (typename Dst::T*)&dst.a_;
+        // [C4 FIX] Corrección de nombres de miembros (sin guion bajo)
+        typename Dst::T* p = (typename Dst::T*)&dst.p;
+        typename Dst::T* a = (typename Dst::T*)&dst.a;
         const int n = nBandsPadded();
         for (int i = 0; i < n; ++i) {
             _mm_store_ps((float*)p, peak[i].p.v);
@@ -110,9 +116,6 @@ struct Analyzer
         lock.unlock();
         return ret;
     }
-
-    // ... Resto de la lógica de update y reset (igual a la propuesta anterior) ...
-    // Se incluye por integridad en el archivo completo.
 
     void update(double fs, int bpo) {
         reset();
@@ -162,7 +165,7 @@ struct Analyzer
 
     struct Peak {
         typedef Band::T T;
-        T p, a;
+        T p, a; // [C4 FIX] Definición sin guiones bajos
     };
 
 private:
@@ -179,7 +182,8 @@ private:
         } else {
             counter += samples;
             for (int i = 0; i < n; ++i) {
-                dst[i].p = kali::max(dst[i].p, src[i].p);
+                // [C4 FIX] Uso directo de SSE
+                dst[i].p = _mm_max_ps(dst[i].p, src[i].p);
                 dst[i].a = dst[i].a + src[i].a;
                 src[i].p = zero; src[i].a = zero;
             }

@@ -1,48 +1,56 @@
 # -----------------------------------------------------------------------------
 # C4 ANALYZER - MAKEFILE (MinGW / GitHub Actions)
-# Arquitectura: x64 | Estándar: gnu++03 | Rutas: libraries/
+# Protocolo: gnu++03 | Static Linking
 # -----------------------------------------------------------------------------
 
-# 1. Definición del Compilador
+# Compilador y Flags
 CXX      := g++
-# Flags críticos:
-# -std=gnu++03: Mantiene compatibilidad con el código legacy de Seven Phases
-# -static-lib...: Empaqueta las librerías para que funcione en cualquier Windows
-# -DWINDOWS_: Define la plataforma para Kali
-CXXFLAGS := -O3 -std=gnu++03 -Wall -Wno-narrowing -fpermissive \
+# Flags:
+# -Wno-unknown-pragmas: Silencia los warnings de #pragma de Visual Studio
+# -fpermissive: Permite código legacy un poco más relajado
+CXXFLAGS := -O3 -std=gnu++03 -Wall -Wno-narrowing -fpermissive -Wno-unknown-pragmas \
             -static-libgcc -static-libstdc++ \
             -DNDEBUG -DWINDOWS_=1 -D__GTHREADS
 
-# 2. Rutas de Inclusión (Las Reglas de Oro)
-# Incluimos explícitamente 'win' y 'sp' para evitar errores de "No such file"
-INC      := -I. -I../libraries -I../libraries/win -I../libraries/sp
+# -----------------------------------------------------------------------------
+# RUTAS DE INCLUSIÓN (CRÍTICO)
+# -----------------------------------------------------------------------------
+# Aquí agregamos las rutas profundas del VST SDK para encontrar audioeffectx.h
+INC      := -I. \
+            -I../libraries \
+            -I../libraries/win \
+            -I../libraries/sp \
+            -I../libraries/vst \
+            -I../libraries/vst/public.sdk/source/vst2.x \
+            -I../libraries/vst/pluginterfaces/vst2.x \
+            -I../libraries/vst/vstsdk2.4/public.sdk/source/vst2.x \
+            -I../libraries/vst/vstsdk2.4/pluginterfaces/vst2.x
 
-# 3. Librerías del Sistema (Linker)
+# Librerías del Sistema (Linker)
 LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid
 
-# 4. Archivos Fuente
+# Archivos Fuente
 SRCS     := main.cpp vstsdk-wrapper.cpp
 OBJS     := $(SRCS:.cpp=.o)
 RES      := main.res
-# Nombre final del binario
 TARGET   := ../C4Analyzer.dll
 
-# 5. Reglas de Construcción
+# Regla Principal
 all: $(TARGET)
 
-# Linker: Crea la DLL final
+# Linker (Creación del DLL)
 $(TARGET): $(OBJS) $(RES)
-	@echo [LINK] Generando C4 Analyzer DLL...
+	@echo [LINK] Creando $(TARGET)...
 	$(CXX) -shared -s -o $@ $(OBJS) $(RES) $(LIBS) -Wl,--kill-at,--subsystem,windows
 
-# Compilador C++
+# Compilación de C++
 %.o: %.cpp
 	@echo [CXX] Compilando $<...
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# Compilador de Recursos (Iconos y Version.h)
+# Compilación de Recursos
 $(RES): rc/main.rc
-	@echo [RC] Procesando recursos...
+	@echo [RC] Compilando recursos...
 	windres $(INC) -Irc -i $< -O coff -o $@
 
 # Limpieza

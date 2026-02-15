@@ -112,10 +112,13 @@ private:
         trace.full("%s: %s, (%p) size %i\n", FUNCTION_,
             isPreset ? "Preset" : "Bank", data_, size_);
 
+        if (!data_ || size_ <= 0)
+            return 0;
+
         if (isPreset)
         {
-            int n = size_ / sizeof(int);
-            n = std::min(n, nParameters); // [C4 FIX] std::min
+            int n = size_ / int(sizeof(int));
+            n = std::min(n, nParameters);
             const int* v = (const int*) data_;
             for (int j = 0; j < n; j++)
                 value[index][j] = v[j];
@@ -123,31 +126,40 @@ private:
             return 1;
         }
 
-        int size = 0;
         const char* data = (const char*) data_;
-        int m = *(const int*) data;
-        
-        // Ajuste de offsets basado en estructura Bank
-        size += sizeof(count);
-        
-        // [C4 FIX] Validación de punteros antes de leer
-        if (size + sizeof(index) > (size_t)size_) return 0;
-        
-        index = *(const int*) (data + size);
-        size += sizeof(count); // index ocupa sizeof(int) == sizeof(count)
-        
-        const char* text = data + size;
-        size += m * sizeof(*name);
-        
-        // Validación de división por cero
-        size_t elemSize = sizeof(**value); // sizeof(int)
-        if (elemSize == 0) return 0;
-        
-        int n = (size_ - size) / (m * elemSize);
-        const int* v = (const int*) (data + size);
+        const size_t total = size_t(size_);
 
-        m = std::min(m, nPresets);    // [C4 FIX] std::min
-        n = std::min(n, nParameters); // [C4 FIX] std::min
+        const size_t header = sizeof(count) + sizeof(index);
+        if (total < header)
+            return 0;
+
+        int m = *(const int*) data;
+        if (m <= 0)
+            return 0;
+
+        index = *(const int*) (data + sizeof(count));
+
+        const size_t namesSize = size_t(m) * sizeof(*name);
+        if (namesSize / sizeof(*name) != size_t(m))
+            return 0;
+
+        const size_t valuesOffset = header + namesSize;
+        if (valuesOffset > total)
+            return 0;
+
+        const char* text = data + header;
+
+        const size_t elemSize = sizeof(**value);
+        const size_t rowSize = size_t(m) * elemSize;
+        if (!rowSize || rowSize / elemSize != size_t(m))
+            return 0;
+
+        const size_t valueBytes = total - valuesOffset;
+        int n = int(valueBytes / rowSize);
+        const int* v = (const int*) (data + valuesOffset);
+
+        m = std::min(m, nPresets);
+        n = std::min(n, nParameters);
 
         for (int i = 0; i < m; i++)
         {
@@ -159,7 +171,7 @@ private:
 
         if (index < 0 || index >= nPresets)
             index = 0;
-        
+
         setPreset(value[index]);
 
         return 1;

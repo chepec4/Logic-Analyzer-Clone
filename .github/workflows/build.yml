@@ -37,12 +37,12 @@ jobs:
         ls -R src/
         git status
 
-    # 4. Compilación Maestra (Usando el Makefile corregido)
+   # 4. Compilación Maestra corregida
     - name: Compile VST Plugin
       shell: msys2 {0}
+      working-directory: src  # <--- CRÍTICO: Entramos a la carpeta para que las rutas ../ funcionen
       run: |
-        # Navegamos a la carpeta del proyecto y ejecutamos el build
-        make -f src/makefile
+        make -f makefile
       env:
         CXX: i686-w64-mingw32-g++
 

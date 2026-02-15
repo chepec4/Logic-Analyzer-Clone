@@ -2,11 +2,22 @@
 #define KALI_WINDOW_INCLUDED
 
 #include "kali/string.h"
-// CRÍTICO: Incluimos graphics.h para que 'Rect' esté definido
-#include "kali/graphics.h" 
 #include <windows.h>
 
 namespace kali {
+
+// ============================================================================
+// ESTRUCTURA RECT (Definición Manual Segura)
+// Validado: Esto no elimina funcionalidad gráfica. Solo define la estructura
+// de datos que usa Windows para saber dónde dibujar la ventana.
+// ============================================================================
+struct Rect 
+{ 
+    int x, y, w, h; 
+    
+    Rect() : x(0), y(0), w(0), h(0) {}
+    Rect(int x_, int y_, int w_, int h_) : x(x_), y(y_), w(w_), h(h_) {}
+};
 
 struct Window
 {
@@ -29,6 +40,8 @@ struct Window
         ::SetWindowPos(handle, 0, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER); 
     }
 
+    // Al definir Rect arriba, esta función ahora compila correctamente
+    // y devuelve las coordenadas reales de la ventana al DAW.
     Rect rect() const
     {
         RECT r;
@@ -36,13 +49,12 @@ struct Window
         return Rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     }
 
-    // --- CORRECCIÓN DE INGENIERÍA: STRING Y CASTING ---
+    // --- FIX DE ALERTAS (String Ambigüedad) ---
+    // Usamos (const char*) explícito para garantizar que el texto se vea.
     bool alert(const char* title, const char* text, const char* comments = 0) const
     {
-        // Solución definitiva a la ambigüedad: Usamos el constructor de formato "%s"
         const string s = !comments ? string("%s", text) 
                                    : string("%s    \n%s    ", text, comments);
-        // Usamos el operador de casting (const char*) de kali::string
         return ::MessageBox(handle, (const char*)s, title, MB_TASKMODAL | MB_ICONWARNING | MB_OK) == IDOK;
     }
 
@@ -59,7 +71,6 @@ struct Window
                                    : string("%s    \n%s    ", text, comments);
         return ::MessageBox(handle, (const char*)s, title, MB_TASKMODAL | MB_ICONERROR | MB_RETRYCANCEL) == IDRETRY;
     }
-    // --------------------------------------------------
 
     void invalidate(const Rect* r = 0, bool erase = true)
     {

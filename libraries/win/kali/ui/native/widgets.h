@@ -1022,7 +1022,7 @@ private:
     private:
 
         typedef Base* (*Make)(const Aux*);
-        // [C4 FIX] Eliminamos operator T() para evitar ambigüedad
+        // [C4 FIX] Eliminamos operator T() para evitar ambigüedad con GCC
 
         template <typename T>
         static Base* make_(const Aux* a) {return a->equal<T>() ? new T() : 0;}
@@ -1087,4 +1087,40 @@ typename T::Type* Ctor(const Window* parent, const Rect& r, const char* text = 0
     typedef typename T::Type Widget; // [C4 FIX] Vital
 
     typename Widget::Handle handle = CreateWindow(Widget::class_(), // [C4 FIX] Vital
-        text, WS_CHILD | WS
+        text, WS_CHILD | WS_VISIBLE | Widget::style_,
+        r.x, r.y, r.w, r.h, parent->handle,
+        (HMENU) 343, app->module(), 0);
+
+    if (handle)
+    {
+        ::SendMessage(handle, WM_SETFONT,
+            (WPARAM) (HFONT) Font::main(), 0);
+        Widget* widget = new Widget();
+        widget->ctor(0 /* fixme */, handle);
+        return widget;
+    }
+
+    trace("%s: CreateWindow failed [%i]\n", FUNCTION_, ::GetLastError());
+    return 0;
+}
+
+#endif // ~ KALI_UI_NATIVE_WIDGETS_BRUTE_CTOR
+
+// ............................................................................
+
+} // ~ namespace widget
+} // ~ namespace native
+} // ~ namespace ui
+
+// ............................................................................
+
+using ui::native::Timer;
+using ui::native::WaitCursor;
+
+// ............................................................................
+
+} // ~ namespace kali
+
+// ............................................................................
+
+#endif // ~ KALI_UI_NATIVE_WIDGETS_INCLUDED

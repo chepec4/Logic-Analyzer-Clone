@@ -2,6 +2,8 @@
 #define KALI_WINDOW_INCLUDED
 
 #include "kali/string.h"
+// CRÍTICO: Incluimos graphics.h para que 'Rect' esté definido
+#include "kali/graphics.h" 
 #include <windows.h>
 
 namespace kali {
@@ -34,34 +36,30 @@ struct Window
         return Rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     }
 
-    // =========================================================================
-    // REPARACIÓN METICULOSA: OPERADOR TERNARIO Y TIPOS DE STRING
-    // =========================================================================
-
+    // --- CORRECCIÓN DE INGENIERÍA: STRING Y CASTING ---
     bool alert(const char* title, const char* text, const char* comments = 0) const
     {
-        // Forzamos que ambos resultados del operador sean del mismo tipo (string)
-        // para evitar el error: 'operands to ?: have different types'
-        const string s = !comments ? string(text) 
+        // Solución definitiva a la ambigüedad: Usamos el constructor de formato "%s"
+        const string s = !comments ? string("%s", text) 
                                    : string("%s    \n%s    ", text, comments);
-        return ::MessageBox(handle, s.c_str(), title, MB_TASKMODAL | MB_ICONWARNING | MB_OK) == IDOK;
+        // Usamos el operador de casting (const char*) de kali::string
+        return ::MessageBox(handle, (const char*)s, title, MB_TASKMODAL | MB_ICONWARNING | MB_OK) == IDOK;
     }
 
     bool alertYesNo(const char* title, const char* text, const char* comments = 0) const
     {
-        const string s = !comments ? string(text) 
+        const string s = !comments ? string("%s", text) 
                                    : string("%s    \n%s    ", text, comments);
-        return ::MessageBox(handle, s.c_str(), title, MB_TASKMODAL | MB_ICONQUESTION | MB_YESNO) == IDYES;
+        return ::MessageBox(handle, (const char*)s, title, MB_TASKMODAL | MB_ICONQUESTION | MB_YESNO) == IDYES;
     }
 
     bool alertRetryCancel(const char* title, const char* text, const char* comments = 0) const
     {
-        const string s = !comments ? string(text) 
+        const string s = !comments ? string("%s", text) 
                                    : string("%s    \n%s    ", text, comments);
-        return ::MessageBox(handle, s.c_str(), title, MB_TASKMODAL | MB_ICONERROR | MB_RETRYCANCEL) == IDRETRY;
+        return ::MessageBox(handle, (const char*)s, title, MB_TASKMODAL | MB_ICONERROR | MB_RETRYCANCEL) == IDRETRY;
     }
-    
-    // =========================================================================
+    // --------------------------------------------------
 
     void invalidate(const Rect* r = 0, bool erase = true)
     {
@@ -85,4 +83,3 @@ struct Window
 } // ~ namespace kali
 
 #endif // ~ KALI_WINDOW_INCLUDED
-

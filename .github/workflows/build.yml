@@ -1,33 +1,64 @@
 name: Build C4 Analyzer (Logic Pro Edition)
 
-on: [push, workflow_dispatch]
+# Control de ejecución por cambios en src o librerías
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
 
 jobs:
   build-windows:
-    name: Compilar en Windows (MinGW x64)
+    name: Compilar en Windows (MinGW-w64 x64)
     runs-on: windows-latest
     
+    defaults:
+      run:
+        shell: pwsh
+
     steps:
-    - name: Checkout del Codigo
+    - name: 1. Checkout del Código
       uses: actions/checkout@v4
 
-    - name: Instalar MinGW
+    - name: 2. Configurar Entorno MinGW
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: x64
         version: 12.2.0
+        static: 1
 
-    - name: Compilar C4 Analyzer
+    - name: 3. Validación de Pre-requisitos
+      run: |
+        g++ --version
+        mingw32-make --version
+        if (!(Test-Path "src")) { throw "Error: Carpeta 'src' no encontrada." }
+
+    - name: 4. Compilación del Plugin (C4 Optimized)
       working-directory: src
-      run: mingw32-make
+      run: |
+        # Limpieza previa para asegurar un build desde cero
+        mingw32-make clean
+        # Compilación con salida detallada
+        mingw32-make -j2
 
-    - name: Verificar Existencia del DLL
-      run: dir C4Analyzer.dll
-      shell: cmd
+    - name: 5. Verificación de Integridad del DLL
+      run: |
+        # El Makefile genera el DLL en la raíz (../C4Analyzer.dll)
+        if (Test-Path "C4Analyzer.dll") {
+          $size = (Get-Item "C4Analyzer.dll").Length
+          echo "Build Exitoso. Tamaño del DLL: $size bytes"
+          # Validamos que no sea un archivo vacío (mínimo 50KB esperado)
+          if ($size -lt 50000) { throw "Error: El DLL generado es demasiado pequeño." }
+        } else {
+          throw "Error: C4Analyzer.dll no fue encontrado en la raíz."
+        }
 
-    - name: Subir Artefacto
+    - name: 6. Empaquetar y Subir VST
       uses: actions/upload-artifact@v4
       with:
-        name: C4Analyzer-VST
+        name: C4Analyzer-VST-x64
         path: C4Analyzer.dll
         if-no-files-found: error
+        retention-days: 7

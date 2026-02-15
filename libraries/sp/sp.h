@@ -9,33 +9,29 @@
 // ============================================================================
 // INFRAESTRUCTURA C4: WRAPPER SSE GLOBAL
 // ============================================================================
-// Definimos m128 en el espacio global para que analyzer.h lo encuentre sin
-// necesitar el prefijo sp::. Usamos una UNION para permitir acceso como array.
+// Definimos m128 de forma global para compatibilidad con analyzer.h
 // ============================================================================
 
 struct m128
 {
     union
     {
-        __m128 v;    // Para operaciones SIMD rápidas
-        float  f[4]; // Para acceso directo tipo array (k[i])
+        __m128 v;    // Registro SIMD
+        float  f[4]; // Acceso tipo array
     };
 
-    // --- COMPATIBILIDAD CON ANALYZER.H ---
-    // Definimos los tipos y constantes que analyzer.h busca (T::Type, T::size)
+    // Tipos requeridos por las plantillas de analyzer.h
     typedef float Type;
     enum { size = 4 };
 
-    // --- CONSTRUCTORES ---
     __forceinline m128() {}
     __forceinline m128(__m128 i) : v(i) {}
-    __forceinline m128(float i) : v(_mm_set_ps1(i)) {} // Broadcast (1.0 -> {1,1,1,1})
+    __forceinline m128(float i) : v(_mm_set_ps1(i)) {}
 
-    // --- OPERADORES DE CONVERSIÓN ---
-    // Permite pasar esta struct a funciones que esperan __m128 nativo
+    // Conversión a tipo nativo para instrucciones intrínsecas
     __forceinline operator __m128() const { return v; }
 
-    // --- ACCESO COMO ARRAY (Fix para error operator[]) ---
+    // Operadores de acceso a componentes
     __forceinline float& operator[](int i) { return f[i]; }
     __forceinline const float& operator[](int i) const { return f[i]; }
 };
@@ -49,54 +45,44 @@ __forceinline m128 operator - (const m128& a, const m128& b) { return _mm_sub_ps
 __forceinline m128 operator * (const m128& a, const m128& b) { return _mm_mul_ps(a.v, b.v); }
 __forceinline m128 operator / (const m128& a, const m128& b) { return _mm_div_ps(a.v, b.v); }
 
-// Lógicos
 __forceinline m128 operator & (const m128& a, const m128& b) { return _mm_and_ps(a.v, b.v); }
 __forceinline m128 operator | (const m128& a, const m128& b) { return _mm_or_ps(a.v, b.v); }
 __forceinline m128 operator ^ (const m128& a, const m128& b) { return _mm_xor_ps(a.v, b.v); }
 
 // ============================================================================
-// FUNCIONES AUXILIARES GLOBALES
+// FUNCIONES AUXILIARES
 // ============================================================================
 
-// Min/Max (Nombres en minúscula para coincidir con llamadas legacy)
 __forceinline m128 min(const m128& a, const m128& b) { return _mm_min_ps(a.v, b.v); }
 __forceinline m128 max(const m128& a, const m128& b) { return _mm_max_ps(a.v, b.v); }
 
-// Shuffle (Mezcla de componentes)
 template <int a, int b, int c, int d>
 __forceinline m128 shuffle(const m128& x, const m128& y)
 {
     return _mm_shuffle_ps(x.v, y.v, _MM_SHUFFLE(d, c, b, a));
 }
 
-// Suma Horizontal (Reduce el vector a un escalar)
+// [C4 FIX] Corrección de conversión de tipo en hsum para GCC
 __forceinline float hsum(const m128& x)
 {
-    m128 r = _mm_add_ps(x.v, _mm_movehl_ps(x.v, x.v));
-    return _mm_add_ss(r.v, _mm_shuffle_ps(r.v, r.v, 1));
+    __m128 r = _mm_add_ps(x.v, _mm_movehl_ps(x.v, x.v));
+    __m128 s = _mm_add_ss(r, _mm_shuffle_ps(r, r, 1));
+    return _mm_cvtss_f32(s); // Extrae el float bajo del registro correctamente
 }
 
 // ============================================================================
-// ESPACIO DE NOMBRES SP (Filtros y Alias)
+// ESPACIO DE NOMBRES SP (FILTROS)
 // ============================================================================
 
 namespace sp {
 
-// Definimos m4f como un alias de nuestro m128 global
-typedef ::m128 m4f; 
-typedef ::m128 m128; // Alias interno por si acaso
-
-// ............................................................................
-// FILTROS DSP
-// ............................................................................
+// Alias para los filtros internos
+typedef ::m128 m128;
+typedef ::m128 m4f;
 
 struct TwoPoleLP
 {
-    enum
-    {
-        State = 2,
-        Coeff = 3
-    };
+    enum { State = 2, Coeff = 3 };
 
     static inline_ ::m128 tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
     {
@@ -109,7 +95,7 @@ struct TwoPoleLP
     }
 };
 
-struct TwoPoleLPSAx : TwoPoleLP // useful only for SA due to delayed output
+struct TwoPoleLPSAx : TwoPoleLP
 {
     static inline_ ::m128 tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
     {
@@ -124,10 +110,10 @@ struct TwoPoleLPSAx : TwoPoleLP // useful only for SA due to delayed output
 
 struct ZeroLP
 {
-    enum {State = 1};
+    enum { State = 1 };
 
-    template <typename T> static inline_
-    T tick(T in, T (&z)[State])
+    template <typename T> 
+    static inline_ T tick(T in, T (&z)[State])
     {
         T out = in + z[0];
         z[0]  = in;
@@ -140,7 +126,6 @@ struct ZeroLP
 // ============================================================================
 // INCLUSIONES DEPENDIENTES
 // ============================================================================
-// Importante: coefficients.h y more.h dependen de que m128 ya exista.
 
 #include "sp/coefficients.h"
 #include "sp/more.h"

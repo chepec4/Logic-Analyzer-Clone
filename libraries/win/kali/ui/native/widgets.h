@@ -427,7 +427,7 @@ struct Null : Interface
 
 // ............................................................................
 
-// [C4 FIX] Agregado 'typename' para GCC
+// Declaración forward con typename corregido
 template <typename T>
 typename T::Type* Ctor(Parent*, const Rect&, const char* text = 0);
 
@@ -868,17 +868,17 @@ struct ImageList
 {
     ImageList(int n, const char* rc)
     {
-        BITMAPI bi; // [C4 FIX] BITMAP -> BITMAPI si BITMAP da error, pero dejemos BITMAP
+        // [C4 FIX] Corregido BITMAPI a BITMAP
+        BITMAP bi; 
         HANDLE image = ::LoadImage(app->module(),
             rc, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
         if (!image)
             trace("%s: LoadImage(\"%s\") failed [%i]\n",
                 FUNCTION_, rc, ::GetLastError());
 
-        BITMAP bm; // Usar nombre standard
-        ::GetObject(image, sizeof(bm), &bm);
-        handle = ::ImageList_Create(bm.bmWidth / n,
-            bm.bmHeight, ILC_COLOR32, n, 0);
+        ::GetObject(image, sizeof(bi), &bi);
+        handle = ::ImageList_Create(bi.bmWidth / n,
+            bi.bmHeight, ILC_COLOR32, n, 0);
         ::ImageList_Add(handle, (HBITMAP) image, 0);
         ::DeleteObject(image);
     }
@@ -1022,7 +1022,7 @@ private:
     private:
 
         typedef Base* (*Make)(const Aux*);
-        // template <typename T> operator T () const; // Eliminado por ambigüedad
+        // [C4 FIX] Eliminamos operator T() para evitar ambigüedad
 
         template <typename T>
         static Base* make_(const Aux* a) {return a->equal<T>() ? new T() : 0;}
@@ -1053,13 +1053,13 @@ private:
 
 // ............................................................................
 
-// [C4 FIX] Agregado 'typename' para GCC y simplificada la lógica
+// [C4 FIX] Agregado 'typename' mandatorio para GCC
 template <typename T> inline
 typename T::Type* Ctor(Parent* parent, const Rect& r, const char* text)
 {
     typedef typename T::Type Widget; // [C4 FIX] Vital
 
-    Widget::Handle handle = CreateWindowEx
+    typename Widget::Handle handle = CreateWindowEx // [C4 FIX] Vital
        (Widget::styleEx_, Widget::class_(), text,
         WS_CHILD | WS_VISIBLE | Widget::style_,
         r.x, r.y, r.w, r.h, parent->window()->handle,
@@ -1086,41 +1086,5 @@ typename T::Type* Ctor(const Window* parent, const Rect& r, const char* text = 0
 {
     typedef typename T::Type Widget; // [C4 FIX] Vital
 
-    Widget::Handle handle = CreateWindow(Widget::class_(),
-        text, WS_CHILD | WS_VISIBLE | Widget::style_,
-        r.x, r.y, r.w, r.h, parent->handle,
-        (HMENU) 343, app->module(), 0);
-
-    if (handle)
-    {
-        ::SendMessage(handle, WM_SETFONT,
-            (WPARAM) (HFONT) Font::main(), 0);
-        Widget* widget = new Widget();
-        widget->ctor(0 /* fixme */, handle);
-        return widget;
-    }
-
-    trace("%s: CreateWindow failed [%i]\n", FUNCTION_, ::GetLastError());
-    return 0;
-}
-
-#endif // ~ KALI_UI_NATIVE_WIDGETS_BRUTE_CTOR
-
-// ............................................................................
-
-} // ~ namespace widget
-} // ~ namespace native
-} // ~ namespace ui
-
-// ............................................................................
-
-using ui::native::Timer;
-using ui::native::WaitCursor;
-
-// ............................................................................
-
-} // ~ namespace kali
-
-// ............................................................................
-
-#endif // ~ KALI_UI_NATIVE_WIDGETS_INCLUDED
+    typename Widget::Handle handle = CreateWindow(Widget::class_(), // [C4 FIX] Vital
+        text, WS_CHILD | WS

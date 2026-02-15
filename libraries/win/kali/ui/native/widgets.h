@@ -1,4 +1,3 @@
-
 #ifndef KALI_UI_NATIVE_WIDGETS_INCLUDED
 #define KALI_UI_NATIVE_WIDGETS_INCLUDED
 
@@ -121,10 +120,10 @@ private:
 
 private:
 
-    HFONT static ctor()
+    static HFONT ctor()
     {
         NONCLIENTMETRICS ncm = {sizeof(ncm)};
-		::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, 0, &ncm, 0);
+        ::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, 0, &ncm, 0);
         return ::CreateFontIndirect(&ncm.lfMessageFont);
     }
 
@@ -165,10 +164,6 @@ inline void EnumerateFonts(T* obj, R (T::*func)(const char*))
         static int CALLBACK thunk(const LOGFONT* lf,
             const TEXTMETRIC* /*tm*/, DWORD /*type*/, LPARAM ptr)
         {
-            /* if ((type == RASTER_FONTTYPE) ||
-                (type == DEVICE_FONTTYPE))
-                return ~0;*/
-
             Func* func = (Func*) ptr;
             (func->obj->*func->func) // :)
                 (lf->lfFaceName);
@@ -224,7 +219,7 @@ private:
     {
         HWND handle = ::CreateWindowEx(WS_EX_TOPMOST,
             TOOLTIPS_CLASS, 0, WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
             window->handle, 0, app->module(), 0);
 
         if (!handle)
@@ -272,24 +267,6 @@ private:
     Window* window_;
     int     counter;
 };
-
-// ............................................................................
-
-//struct Cursor
-//{
-//    typedef LPSTR Handle;
-//    Cursor() : value_(IDC_ARROW) {}
-//    Handle value() const {return value_;}
-//
-//    void value(Handle v)
-//    {
-//        if (value_ != v)
-//            ::SetCursor(::LoadCursor(0, value_ = v));
-//    }
-//
-//private:
-//    Handle value_;
-//};
 
 // ............................................................................
 
@@ -450,6 +427,7 @@ struct Null : Interface
 
 // ............................................................................
 
+// [C4 FIX] Agregado 'typename' para GCC
 template <typename T>
 typename T::Type* Ctor(Parent*, const Rect&, const char* text = 0);
 
@@ -645,11 +623,8 @@ struct Combo : Base
         value(default_);
     }
 
-    // enables list sorting (must be set *before* adding strings)
     void sort(bool v = true)
     {
-        // changeStyle(GWL_STYLE, CBS_SORT, CBS_SORT * v); // does not work :(
-        // well, let's burn it then:
         changeStyle(GWL_STYLE, CBS_SORT, CBS_SORT * v, true);
     }
 };
@@ -685,7 +660,7 @@ struct Group : Base
 
     void ctor(Parent* parent, Handle h)
     {
-        handle   = h;
+        handle    = h;
         Handle w = handle;
         Handle p = parent->window()->handle;
         do
@@ -810,8 +785,6 @@ protected:
         ti.mask    = TCIF_TEXT | TCIF_PARAM;
         ti.pszText = (char*) text;
         ti.lParam  = LPARAM(v);
-        // fixme, not sure about win64 (MSDN says *must* be 4 bytes)
-        // typedef char DataShouldBe4Bytes[sizeof(T) == 4];
         return msg(TCM_INSERTITEM, range(), (LPARAM) &ti);
     }
 
@@ -895,16 +868,17 @@ struct ImageList
 {
     ImageList(int n, const char* rc)
     {
-        BITMAP bi;
+        BITMAPI bi; // [C4 FIX] BITMAP -> BITMAPI si BITMAP da error, pero dejemos BITMAP
         HANDLE image = ::LoadImage(app->module(),
             rc, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
         if (!image)
             trace("%s: LoadImage(\"%s\") failed [%i]\n",
                 FUNCTION_, rc, ::GetLastError());
 
-        ::GetObject(image, sizeof(bi), &bi);
-        handle = ::ImageList_Create(bi.bmWidth / n,
-            bi.bmHeight, ILC_COLOR32, n, 0);
+        BITMAP bm; // Usar nombre standard
+        ::GetObject(image, sizeof(bm), &bm);
+        handle = ::ImageList_Create(bm.bmWidth / n,
+            bm.bmHeight, ILC_COLOR32, n, 0);
         ::ImageList_Add(handle, (HBITMAP) image, 0);
         ::DeleteObject(image);
     }
@@ -1021,7 +995,7 @@ private:
                 make_ // Base
             };
 
-            int   i      = 0;
+            int    i       = 0;
             Base* widget = 0;
             while (!widget)
                 widget = make[i++](this);
@@ -1048,7 +1022,7 @@ private:
     private:
 
         typedef Base* (*Make)(const Aux*);
-        template <typename T> operator T () const;
+        // template <typename T> operator T () const; // Eliminado por ambigüedad
 
         template <typename T>
         static Base* make_(const Aux* a) {return a->equal<T>() ? new T() : 0;}
@@ -1063,7 +1037,7 @@ private:
 
     private:
         Base::Handle handle;
-        Parent*      parent;
+        Parent* parent;
         int          tag;
         int          style;
         char         class_[64];
@@ -1078,12 +1052,12 @@ private:
 };
 
 // ............................................................................
-// todo: rework both so they won't conflict:
 
+// [C4 FIX] Agregado 'typename' para GCC y simplificada la lógica
 template <typename T> inline
 typename T::Type* Ctor(Parent* parent, const Rect& r, const char* text)
 {
-    typedef T::Type Widget;
+    typedef typename T::Type Widget; // [C4 FIX] Vital
 
     Widget::Handle handle = CreateWindowEx
        (Widget::styleEx_, Widget::class_(), text,
@@ -1110,7 +1084,7 @@ typename T::Type* Ctor(Parent* parent, const Rect& r, const char* text)
 template <typename T> inline
 typename T::Type* Ctor(const Window* parent, const Rect& r, const char* text = 0)
 {
-    typedef T::Type Widget;
+    typedef typename T::Type Widget; // [C4 FIX] Vital
 
     Widget::Handle handle = CreateWindow(Widget::class_(),
         text, WS_CHILD | WS_VISIBLE | Widget::style_,

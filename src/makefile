@@ -1,28 +1,35 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (V10.0 - Definitive Production x64)
-# Optimizado para: Windows Server 2025 | MinGW-w64 (GCC 12.2) | C++17
+# C4 ANALYZER - MAKEFILE (MinGW-w64 x64 / GitHub Actions friendly)
 # -----------------------------------------------------------------------------
 
-CXX      := g++
-WINDRES  := windres
-RM       := rm -f
+CROSS_PREFIX ?= x86_64-w64-mingw32
+CXX          := $(CROSS_PREFIX)-g++
+WINDRES      := $(CROSS_PREFIX)-windres
+STRIP        := $(CROSS_PREFIX)-strip
+RM           := rm -f
 
-# -----------------------------------------------------------------------------
-# ARQUITECTURA Y RENDIMIENTO (Regla de Oro: SIMD + Estabilidad)
-# -----------------------------------------------------------------------------
-# -O3 + -ffast-math: Rendimiento crítico para el banco de filtros.
-# -std=gnu++17: Requerido por 'if constexpr' en analyzer.h.
-# -fpermissive: Vital para la compatibilidad con la librería Kali (Seven Phases).
-# -----------------------------------------------------------------------------
-CXXFLAGS := -m64 -O3 -ffast-math -std=gnu++17 -fpermissive -w \
-            -msse -msse2 -msse3 -mstackrealign \
-            -ftemplate-depth=2000 \
-            -static-libgcc -static-libstdc++ \
-            -DNDEBUG -DWINDOWS_=1 -D_WIN32_WINNT=0x0600 -D__GTHREADS
+TARGET       := ../C4Analyzer.dll
+DEF_FILE     := main.def
+SRCS         := main.cpp vstsdk-wrapper.cpp
+OBJS         := $(SRCS:.cpp=.o)
+RES          := main.res
 
-# -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN
-# -----------------------------------------------------------------------------
+# Build profile: release | debug
+BUILD ?= release
+
+COMMON_FLAGS := -m64 -std=gnu++17 -fpermissive -w \
+                -msse -msse2 -msse3 -mstackrealign \
+                -ftemplate-depth=2000 \
+                -DWIN32 -DWIN64 -DWINDOWS_=1 -D_WIN32_WINNT=0x0600 -D__GTHREADS
+
+ifeq ($(BUILD),debug)
+CXXFLAGS := $(COMMON_FLAGS) -O0 -g3 -D_DEBUG
+LDFLAGS  := -m64 -shared -Wl,--kill-at -Wl,--subsystem,windows -Wl,--add-stdcall-alias
+else
+CXXFLAGS := $(COMMON_FLAGS) -O3 -ffast-math -DNDEBUG -static-libgcc -static-libstdc++
+LDFLAGS  := -m64 -shared -s -Wl,--kill-at -Wl,--subsystem,windows -Wl,--add-stdcall-alias
+endif
+
 INC      := -I. \
             -I../libraries \
             -I../libraries/win \
@@ -31,49 +38,44 @@ INC      := -I. \
             -I../libraries/vst/public.sdk/source/vst2.x \
             -I../libraries/vst/pluginterfaces/vst2.x
 
-# -----------------------------------------------------------------------------
-# LIBRERÍAS Y ENLAZADOR (VST Compliance)
-# -----------------------------------------------------------------------------
-# --kill-at: Asegura que el DAW encuentre VSTPluginMain sin decoración de nombres.
-# --add-stdcall-alias: Compatibilidad máxima con Ableton, Cubase y Logic.
-# -----------------------------------------------------------------------------
 LIBS     := -lgdi32 -luser32 -lkernel32 -lcomctl32 -lcomdlg32 -lwinmm -lole32 -luuid -loleaut32 -lopengl32
-LDFLAGS  := -m64 -shared -s -Wl,--kill-at -Wl,--subsystem,windows -Wl,--add-stdcall-alias
 
-# -----------------------------------------------------------------------------
-# ARCHIVOS DEL PROYECTO
-# -----------------------------------------------------------------------------
-SRCS     := main.cpp vstsdk-wrapper.cpp
-OBJS     := $(SRCS:.cpp=.o)
-RES      := main.res
-TARGET   := ../C4Analyzer.dll
+all: check-toolchain $(TARGET)
 
-# -----------------------------------------------------------------------------
-# REGLAS DE CONSTRUCCIÓN
-# -----------------------------------------------------------------------------
+check-toolchain:
+	@command -v $(CXX) >/dev/null 2>&1 || { \
+		echo "Error: $(CXX) no está disponible."; \
+		echo "GitHub Actions (ubuntu-latest): sudo apt-get update && sudo apt-get install -y mingw-w64"; \
+		echo "Instalación: https://www.mingw-w64.org/downloads/"; \
+		exit 1; \
+	}
+	@$(CXX) -dumpmachine | grep -qi '^x86_64-.*mingw' || { \
+		echo "Error: $(CXX) no apunta a MinGW-w64 x64 (target esperado: x86_64-*-mingw*)."; \
+		echo "Sugerencia: make -C src CROSS_PREFIX=x86_64-w64-mingw32"; \
+		exit 1; \
+	}
+	@command -v $(WINDRES) >/dev/null 2>&1 || { \
+		echo "Error: $(WINDRES) no está disponible."; \
+		exit 1; \
+	}
 
-all: $(TARGET)
+$(TARGET): $(OBJS) $(RES) $(DEF_FILE)
+	@echo [LINKER] Ensamblando DLL: $@
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(RES) $(DEF_FILE) $(LIBS)
 
-
-
-# [LINKER] Generación del binario VST DLL
-$(TARGET): $(OBJS) $(RES)
-	@echo [LINKER] Ensamblando binario de producción: $@
-	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(RES) $(LIBS)
-
-# [CXX] Compilación de módulos C++
 %.o: %.cpp
-	@echo [CXX] Procesando núcleo: $<
+	@echo [CXX] Compilando: $<
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# [RC] Compilación de Recursos (Iconos de Logic, Versión, Manifiesto)
 $(RES): rc/main.rc
-	@echo [RC] Compilando recursos visuales: $<
+	@echo [RC] Compilando recursos: $<
 	$(WINDRES) $(INC) -Irc -i $< -O coff -o $@
 
-# Limpieza profunda para regenerar desde cero
+strip: $(TARGET)
+	@command -v $(STRIP) >/dev/null 2>&1 && $(STRIP) --strip-unneeded $(TARGET) || true
+
 clean:
-	@echo [CLEAN] Eliminando objetos y binarios corruptos...
+	@echo [CLEAN] Limpiando artefactos...
 	$(RM) $(OBJS) $(RES) $(TARGET)
 
-.PHONY: all clean
+.PHONY: all clean check-toolchain strip

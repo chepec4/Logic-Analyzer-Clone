@@ -1,0 +1,38 @@
+name: Build C4 Analyzer (Logic Pro Edition)
+
+# Se ejecuta automáticamente al hacer cambios
+on: [push, workflow_dispatch]
+
+jobs:
+  build-windows:
+    name: Compilar en Windows
+    runs-on: windows-latest
+    
+    steps:
+    # 1. Bajar el código
+    - name: Checkout del Código
+      uses: actions/checkout@v4
+
+    # 2. Instalar Compilador (MinGW con GCC 12)
+    - name: Instalar MinGW
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: x64
+        version: 12.2.0
+
+    # 3. Compilar (Ejecuta el Makefile que creamos en src)
+    - name: Compilar C4 Analyzer
+      working-directory: src
+      run: mingw32-make
+
+    # 4. Verificar resultado
+    - name: Verificar DLL
+      run: ls -l ..
+      shell: bash
+
+    # 5. Guardar el archivo DLL para descargar
+    - name: Subir Artefacto
+      uses: actions/upload-artifact@v4
+      with:
+        name: C4Analyzer-VST
+        path: C4Analyzer.dll

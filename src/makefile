@@ -15,9 +15,13 @@ CXXFLAGS := -O3 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive \
             -DNAME="\"C4 Analyzer\"" \
             -DCOMPANY="\"C4 Productions\""
 
-# RUTAS DE INCLUSIÓN (Subimos un nivel para alcanzar /libraries)
-INC      := -I. -I../libraries -I../libraries/sp -I../libraries/win \
-            -I../libraries/vst -I../libraries/vst/public.sdk/source/vst2.x \
+# Sustituye la sección INC en tu src/makefile por esta versión corregida:
+INC      := -I. \
+            -I../libraries \
+            -I../libraries/win \
+            -I../libraries/sp \
+            -I../libraries/vst \
+            -I../libraries/vst/public.sdk/source/vst2.x \
             -I../libraries/vst/pluginterfaces/vst2.x
 
 # LIBRERÍAS DE SISTEMA
@@ -53,3 +57,4 @@ clean:
 	rm -f *.o *.res ../$(TARGET)
 
 .PHONY: all clean
+

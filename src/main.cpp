@@ -1,6 +1,7 @@
 #include "includes.h"
 #include "main.h"
 #include "kali/app.dll.h"
+#include <exception>
 
 /**
  * VST 2.4 ENTRY POINT — RECONSTRUCCIÓN ARQUITECTÓNICA (C4 DEFINITIVE)
@@ -52,10 +53,6 @@ VST_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
         // NOTA: 'Plugin' debe estar completamente definido en main.h tras aplicar
         // el parche de sp::AlignedNew para evitar el error 'incomplete type'.
         Plugin* plugin = new Plugin(audioMaster);
-        
-        if (plugin == nullptr)
-            return nullptr;
-
         AEffect* effect = plugin->getAeffect();
 
         // Validación de integridad de la estructura VST
@@ -67,9 +64,14 @@ VST_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
 
         return effect;
     }
+    catch (const std::exception& e)
+    {
+        trace.warn("%s: %s\n", FUNCTION_, e.what());
+        return nullptr;
+    }
     catch (...)
     {
-        // Blindaje total: Un error en el constructor nunca debe tirar el DAW (Host)
+        trace.warn("%s: unknown exception\n", FUNCTION_);
         return nullptr;
     }
 }

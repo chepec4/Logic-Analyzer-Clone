@@ -1,31 +1,30 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (V5.0 - Extreme Infrastructure Fix)
-# Autor: C4 Productions
+# C4 ANALYZER - MAKEFILE (V6.0 - Final Production Build)
+# Optimizado para MinGW-w64 / GCC 12.2+
 # -----------------------------------------------------------------------------
 
 CXX      := g++
+RM       := rm -f
 
 # -----------------------------------------------------------------------------
-# FLAGS DE COMPILACIÓN (Configuración para entornos de alta complejidad)
+# FLAGS DE COMPILACIÓN (Rendimiento Máximo y Estabilidad)
 # -----------------------------------------------------------------------------
-# -O2: Optimización de rendimiento balanceada.
-# -std=gnu++14: Estándar C++14 con extensiones de GNU para compatibilidad.
-# -fpermissive: Ignora errores de conformidad estricta en código legacy.
-# -w: Silencia advertencias para procesar logs de error limpios.
-# -msse -msse2: Habilita el conjunto de instrucciones del procesador para sp.h.
-# -ftemplate-depth=10000: [CRÍTICO] Límite extremo para plantillas recursivas de Kali.
-# -Wno-narrowing: Permite conversiones de tipos que pierden precisión sin fallar.
-# -static-libgcc -static-libstdc++: Embebe las librerías para que el DLL sea portable.
+# -O3: Optimización agresiva para procesamiento de audio.
+# -ffast-math: Acelera cálculos matemáticos (especial para el motor SIMD sp.h).
+# -std=gnu++14: Estándar base compatible con la infraestructura Kali.
+# -ftemplate-depth=1000: Nivel seguro tras corregir la recursión en runtime.h.
+# -msse -msse2 -msse3: Habilita instrucciones vectoriales modernas.
 # -----------------------------------------------------------------------------
-CXXFLAGS := -O2 -std=gnu++14 -fpermissive -w -msse -msse2 \
-            -ftemplate-depth=10000 \
+CXXFLAGS := -O3 -ffast-math -std=gnu++14 -fpermissive -w \
+            -msse -msse2 -msse3 \
+            -ftemplate-depth=1000 \
             -Wno-narrowing \
             -static-libgcc -static-libstdc++ \
-            -DNDEBUG -DWINDOWS_=1 -D__GTHREADS \
-            -D_WIN32_WINNT=0x0600 
+            -DNDEBUG -DWINDOWS_=1 -D_WIN32_WINNT=0x0600 \
+            -D__GTHREADS
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN (Mapa de dependencias)
+# RUTAS DE INCLUSIÓN
 # -----------------------------------------------------------------------------
 INC      := -I. \
             -I../libraries \
@@ -36,12 +35,13 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x
 
 # -----------------------------------------------------------------------------
-# LIBRERÍAS DEL SISTEMA (Enlazado de Windows)
+# LIBRERÍAS Y ENLAZADO
 # -----------------------------------------------------------------------------
 LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid
+LDFLAGS  := -shared -s -Wl,--kill-at -Wl,--subsystem,windows
 
 # -----------------------------------------------------------------------------
-# ARCHIVOS FUENTE Y OBJETIVO FINAL
+# ARCHIVOS DEL PROYECTO
 # -----------------------------------------------------------------------------
 SRCS     := main.cpp vstsdk-wrapper.cpp
 OBJS     := $(SRCS:.cpp=.o)
@@ -54,23 +54,24 @@ TARGET   := ../C4Analyzer.dll
 
 all: $(TARGET)
 
-# 1. Enlazado final del VST DLL
+# [LINK] Ensamblado del DLL Final
 $(TARGET): $(OBJS) $(RES)
-	@echo [LINK] Ensamblando binario final C4 Analyzer...
-	$(CXX) -shared -s -o $@ $(OBJS) $(RES) $(LIBS) -Wl,--kill-at,--subsystem,windows
+	@echo [LINKER] Generando binario VST: $@
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(RES) $(LIBS)
 
-# 2. Compilación de los módulos C++
+# [CXX] Compilación de Código Fuente
 %.o: %.cpp
-	@echo [CXX] Procesando modulo: $<...
+	@echo [CXX] Compilando modulo: $<
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# 3. Compilación de Recursos (Iconos, Versión y Metadatos)
+# [RC] Compilación de Recursos de Windows
 $(RES): rc/main.rc
-	@echo [RC] Integrando recursos del sistema...
+	@echo [RC] Procesando recursos e iconos: $<
 	windres $(INC) -Irc -i $< -O coff -o $@
 
-# 4. Limpieza del entorno de compilación
+# Limpieza del Directorio
 clean:
-	rm -f $(OBJS) $(RES) $(TARGET)
+	@echo [CLEAN] Eliminando archivos temporales...
+	$(RM) $(OBJS) $(RES) $(TARGET)
 
 .PHONY: all clean

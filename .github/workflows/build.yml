@@ -1,32 +1,46 @@
 name: Build C4 Analyzer (Logic Pro Edition)
 
+# Se ejecuta al hacer push o manualmente desde la pestaña Actions
 on: [push, workflow_dispatch]
 
 jobs:
   build-windows:
-    name: Compilar en Windows
+    name: Compilar en Windows (MinGW x64)
     runs-on: windows-latest
     
     steps:
-    - name: Checkout del Código
+    # 1. Bajamos el código del repositorio
+    - name: 📥 Checkout del Código
       uses: actions/checkout@v4
 
-    - name: Instalar MinGW
+    # 2. Preparamos el compilador GCC 12 (MinGW)
+    # Usamos la versión 12.2.0 que es compatible con las correcciones de sintaxis que hicimos
+    - name: ⚙️ Instalar MinGW
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: x64
         version: 12.2.0
 
-    - name: Compilar C4 Analyzer
+    # 3. Compilación
+    # Ejecutamos el Makefile que está dentro de la carpeta 'src'
+    # El Makefile está configurado para soltar el DLL en la raíz del proyecto (../C4Analyzer.dll)
+    - name: 🔨 Compilar C4 Analyzer
       working-directory: src
       run: mingw32-make
 
-    - name: Verificar DLL
-      run: ls -l ..
-      shell: bash
+    # 4. Verificación de Resultados
+    # Listamos el directorio raíz para confirmar visualmente en el log que el DLL existe.
+    # Usamos 'dir' nativo de Windows.
+    - name: 🔍 Verificar Existencia del DLL
+      run: dir C4Analyzer.dll
+      shell: cmd
 
-    - name: Subir Artefacto
+    # 5. Empaquetado
+    # Subimos el DLL resultante para que lo puedas descargar.
+    # 'if-no-files-found: error' detendrá el proceso en rojo si el DLL no se creó.
+    - name: 📦 Subir Artefacto
       uses: actions/upload-artifact@v4
       with:
         name: C4Analyzer-VST
         path: C4Analyzer.dll
+        if-no-files-found: error

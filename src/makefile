@@ -1,27 +1,31 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (Modo Compatibilidad Extrema - MinGW/GCC 12)
+# C4 ANALYZER - MAKEFILE (V4.0 - Template Depth Fix)
 # Autor: C4 Productions
 # -----------------------------------------------------------------------------
 
 CXX      := g++
 
 # -----------------------------------------------------------------------------
-# FLAGS DE COMPILACIÓN (La magia para que funcione código de 2008 en 2026)
+# FLAGS DE COMPILACIÓN
 # -----------------------------------------------------------------------------
-# -O2: Optimización equilibrada (Rápido y estable).
-# -std=gnu++14: Usamos C++14 para soportar la estructura m128 del Paso C.
-# -fpermissive: CRÍTICO. Permite código "sucio" antiguo (ignora errores de typename).
-# -w: Silencia todos los warnings para ver si hay errores reales.
-# -msse -msse2: Habilita las instrucciones matemáticas del procesador.
-# -static-lib...: Mete las librerías dentro del DLL (Portable).
+# -O2: Optimización de velocidad estándar.
+# -std=gnu++14: Estándar C++14 con extensiones GNU.
+# -fpermissive: Permite código legacy que no cumple estrictamente el estándar.
+# -w: Desactiva todos los warnings para limpiar la salida.
+# -msse -msse2: Habilita instrucciones SIMD (requerido por sp.h).
+# -ftemplate-depth=5000: [CRÍTICO] Aumenta el límite de recursión para Kali.
+# -Wno-narrowing: Evita errores de conversión de tipos en listas de inicialización.
+# -static-lib...: Enlazado estático para portabilidad (no requiere DLLs extra).
 # -----------------------------------------------------------------------------
 CXXFLAGS := -O2 -std=gnu++14 -fpermissive -w -msse -msse2 \
+            -ftemplate-depth=5000 \
+            -Wno-narrowing \
             -static-libgcc -static-libstdc++ \
             -DNDEBUG -DWINDOWS_=1 -D__GTHREADS \
             -D_WIN32_WINNT=0x0600 
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN (Tu mapa de archivos local)
+# RUTAS DE INCLUSIÓN
 # -----------------------------------------------------------------------------
 INC      := -I. \
             -I../libraries \
@@ -51,7 +55,7 @@ TARGET   := ../C4Analyzer.dll
 all: $(TARGET)
 
 # 1. Enlazado final (Creación del DLL)
-# -Wl,--kill-at: Obligatorio para que los DAWs encuentren 'VSTPluginMain'
+# -Wl,--kill-at: Obligatorio para exportar VSTPluginMain correctamente
 $(TARGET): $(OBJS) $(RES)
 	@echo [LINK] Ensamblando C4 Analyzer DLL...
 	$(CXX) -shared -s -o $@ $(OBJS) $(RES) $(LIBS) -Wl,--kill-at,--subsystem,windows

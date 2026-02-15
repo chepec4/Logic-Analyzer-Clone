@@ -1,3 +1,11 @@
+; =============================================================================
+; C4 ANALYZER - DEFINITION FILE
+; Garantiza que el DAW encuentre los puntos de entrada del VST
+; =============================================================================
+
+LIBRARY      "C4Analyzer"
+DESCRIPTION  "C4 Analyzer VST Plugin"
+
 EXPORTS
-    main = VSTPluginMain
-	VSTPluginMain
+    VSTPluginMain
+    main=VSTPluginMain

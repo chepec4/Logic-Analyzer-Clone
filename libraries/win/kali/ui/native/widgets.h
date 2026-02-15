@@ -3,37 +3,36 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include "kali/window.h"
 #include "kali/ui/native/widgets.base.h"
 
 namespace kali {
 
 // ============================================================================
-// 1. UTILIDADES DE SISTEMA (Timer y Cursor)
+// 1. UTILIDADES DE SISTEMA
 // ============================================================================
 
 struct Timer : UsesCallback {
     Window* w;
-    Timer() : w(0) {}
-    // Thunk para SetTimer de Win32
+    Timer() : w(nullptr) {}
     void start(Window* win, unsigned ms) {
-        stop();
-        w = win;
-        ::SetTimer(w->handle, (UINT_PTR)this, ms, thunk);
+        stop(); w = win;
+        if (w) ::SetTimer(w->handle, (UINT_PTR)this, ms, thunk);
     }
     void stop() {
         if (w) ::KillTimer(w->handle, (UINT_PTR)this);
-        w = 0;
+        w = nullptr;
     }
     static VOID CALLBACK thunk(HWND, UINT, UINT_PTR p, DWORD) {
-        Timer* t = (Timer*)p;
+        Timer* t = reinterpret_cast<Timer*>(p);
         if (t) t->callback(0);
     }
 };
 
 struct WaitCursor {
     HCURSOR old;
-    WaitCursor(bool active = true) {
-        old = ::SetCursor(::LoadCursor(0, active ? IDC_WAIT : IDC_ARROW));
+    explicit WaitCursor(bool active = true) {
+        old = ::SetCursor(::LoadCursor(nullptr, active ? IDC_WAIT : IDC_ARROW));
     }
     ~WaitCursor() { ::SetCursor(old); }
 };
@@ -43,7 +42,7 @@ namespace ui { namespace native {
     using kali::WaitCursor;
 
 // ============================================================================
-// 2. FUENTES Y ESCALADO
+// 2. FUENTES Y ESCALADO (Vital para sa.editor.h)
 // ============================================================================
 
 struct Font : ReleaseAny {
@@ -56,14 +55,20 @@ struct Font : ReleaseAny {
     };
 
     static const Font& main() {
-        static Font* aux = 0;
+        static Font* aux = nullptr;
         if (!aux) aux = app->autorelease(new Font);
         return *aux;
     }
 
     HFONT handle;
     operator HFONT() const { return handle; }
-    Scale scale() const { return getScale(handle); }
+    Scale scale() const {
+        HDC dc = ::CreateCompatibleDC(nullptr);
+        HGDIOBJ f = ::SelectObject(dc, handle);
+        TEXTMETRIC tm; ::GetTextMetrics(dc, &tm);
+        ::SelectObject(dc, f); ::DeleteDC(dc);
+        return Scale(tm.tmAveCharWidth, tm.tmHeight);
+    }
 
     Font() {
         NONCLIENTMETRICS ncm = { sizeof(ncm) };
@@ -71,94 +76,98 @@ struct Font : ReleaseAny {
         handle = ::CreateFontIndirect(&ncm.lfMessageFont);
     }
     ~Font() { ::DeleteObject(handle); }
-
-private:
-    static Scale getScale(HFONT h) {
-        HDC dc = ::CreateCompatibleDC(0);
-        HGDIOBJ f = ::SelectObject(dc, h);
-        TEXTMETRIC tm; ::GetTextMetrics(dc, &tm);
-        ::SelectObject(dc, f); ::DeleteDC(dc);
-        return Scale(tm.tmAveCharWidth, tm.tmHeight);
-    }
 };
 
 // ============================================================================
-// 3. NAMESPACE WIDGET (Componentes Visuales)
+// 3. NAMESPACE WIDGET (Implementación Real de Contratos)
 // ============================================================================
 
 namespace widget {
 
 struct Base : Interface {
     HWND handle;
-    Base() : handle(0) {}
+    Base() : handle(nullptr) {}
 
-    // [C4 FIX] Requerido por app.details.h
-    virtual void destroy() {
-        if (handle) ::DestroyWindow(handle);
-        handle = 0;
-    }
-
-    virtual void ctor(Parent* p, HWND h) {
-        handle = h;
-        Window(handle).object(this);
-    }
-
-    Window::Handle expose() const { return handle; }
+    // [C4 ARCHITECTURE] Implementación de virtuals de Interface (ui/base.h)
+    virtual bool enable() const override { return handle && ::IsWindowEnabled(handle); }
+    virtual void enable(bool e) override { if(handle) ::EnableWindow(handle, e); }
+    virtual bool visible() const override { return handle && ::IsWindowVisible(handle); }
+    virtual void visible(bool v) override { if(handle) ::ShowWindow(handle, v ? SW_SHOW : SW_HIDE); }
     
-    void text(const char* s) { ::SetWindowText(handle, s); }
-    string text() const {
-        char buf[512]; ::GetWindowText(handle, buf, 512);
-        return string(buf);
+    virtual int  value() const override { return 0; }
+    virtual void value(int) override {}
+    virtual int  range() const override { return 100; }
+    virtual void range(int) override {}
+
+    virtual void destroy() override { if(handle) ::DestroyWindow(handle); handle = nullptr; }
+    virtual Window::Handle expose() const override { return handle; }
+
+    virtual void text(const char* s) override { if(handle) ::SetWindowTextA(handle, s ? s : ""); }
+    virtual string text() const override {
+        if (!handle) return string();
+        char buf[512]; ::GetWindowTextA(handle, buf, 512);
+        // [C4 FIX] Usamos sprintf para evitar el constructor privado String(T)
+        return string("%s", buf);
     }
 
-    void size(int w, int h) {
-        ::SetWindowPos(handle, 0, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
-    }
-    Size size() {
-        RECT r; ::GetClientRect(handle, &r);
-        return Size(r.right, r.bottom);
-    }
-
+    void ctor(Parent* p, HWND h) { handle = h; Window(h).object(this); }
+    Size size() { RECT r; ::GetClientRect(handle, &r); return Size(r.right, r.bottom); }
+    
     static void thunk_(HWND h, int msg) {
         Base* w = Window(h).object<Base>();
         if (w) w->callback(msg);
     }
     
-    static void drawThunk_(DRAWITEMSTRUCT* ds) {
-        Base* w = Window(ds->hwndItem).object<Base>();
-        if (w) w->draw(ds);
-    }
-
     virtual void draw(DRAWITEMSTRUCT*) {}
     enum { style_ = 0, styleEx_ = 0 };
 };
 
-// Definiciones de Widgets Estándar
+// --- Widgets Estándar ---
 struct Text : Base { static const char* class_() { return WC_STATIC; } };
+struct TextRight : Text { enum { style_ = SS_RIGHT }; };
 struct Edit : Base { static const char* class_() { return WC_EDIT; } };
+struct TextCopy : Edit { enum { style_ = ES_READONLY }; };
 struct Button : Base { static const char* class_() { return WC_BUTTON; } };
-struct Combo : Base { static const char* class_() { return WC_COMBOBOX; } };
-
-// [C4 FIX] Widgets específicos requeridos por el Analizador
-struct Meter : Base { 
-    static const char* class_() { return PROGRESS_CLASS; } 
-    void range(int maxV) { ::SendMessage(handle, PBM_SETRANGE32, 0, maxV); }
-    void value(int v) { ::SendMessage(handle, PBM_SETPOS, v, 0); }
+struct Toggle : Button {
+    int  value() const override { return (int)::SendMessage(handle, BM_GETCHECK, 0, 0); }
+    void value(int v) override { ::SendMessage(handle, BM_SETCHECK, v, 0); }
 };
 
-struct Break : Text { 
-    enum { style_ = SS_ETCHEDHORZ }; 
+struct Combo : Base {
+    static const char* class_() { return WC_COMBOBOX; }
+    void add(const char* t) { ::SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)t); }
+    void clear() { ::SendMessage(handle, CB_RESETCONTENT, 0, 0); }
+    int  value() const override { return (int)::SendMessage(handle, CB_GETCURSEL, 0, 0); }
+    void value(int v) override { ::SendMessage(handle, CB_SETCURSEL, v, 0); }
 };
+
+// --- Widgets Específicos del Analizador ---
+struct Meter : Base {
+    static const char* class_() { return PROGRESS_CLASS; }
+    void range(int maxV) override { ::SendMessage(handle, PBM_SETRANGE32, 0, maxV); }
+    void value(int v) override { ::SendMessage(handle, PBM_SETPOS, v, 0); }
+};
+
+struct Break : Text { enum { style_ = SS_ETCHEDHORZ }; };
 
 struct LayerTabs : Base {
     static const char* class_() { return WC_TABCONTROL; }
     int add(const char* t, Window* win) {
-        TCITEM ti = { TCIF_TEXT | TCIF_PARAM, 0, 0, (char*)t, 0, (LPARAM)win->handle };
+        TCITEM ti = { TCIF_TEXT | TCIF_PARAM, 0, 0, const_cast<char*>(t), 0, (LPARAM)win->handle };
         return (int)::SendMessage(handle, TCM_INSERTITEM, 0, (LPARAM)&ti);
     }
 };
 
-// Constructor desde Recursos (.rc)
+struct Toolbar : Base { 
+    static const char* class_() { return TOOLBARCLASSNAME; }
+    void add(int n, const char* a, const char* b=nullptr) {} 
+};
+
+struct ColorWell : Base {
+    static COLORREF& custom(int i) { static COLORREF c[16]; return c[i]; }
+};
+
+// --- Constructores de Recursos ---
 struct ResourceCtor {
     Parent* p;
     ResourceCtor(Parent* p) : p(p) {}
@@ -173,18 +182,18 @@ struct ResourceCtor {
     Aux operator()(int id) const { return Aux(p, id); }
 };
 
-// Constructor Dinámico (Programático)
+// Constructor Dinámico compatible con Ptr<T>
 template <typename T> inline
-typename T::Type* Ctor(Parent* parent, const Rect& r, const char* text = 0) {
+typename T::Type* Ctor(Parent* parent, const Rect& r, const char* text = nullptr) {
     typedef typename T::Type W;
-    HWND h = ::CreateWindowEx(W::styleEx_, W::class_(), text,
+    HWND h = ::CreateWindowExA(W::styleEx_, W::class_(), text,
         WS_CHILD | WS_VISIBLE | W::style_,
-        r.x, r.y, r.w, r.h, parent->window()->handle, 0, GetModuleHandle(0), 0);
+        r.x, r.y, r.w, r.h, parent->window()->handle, nullptr, GetModuleHandle(nullptr), nullptr);
     if (h) {
         W* w = new W(); w->ctor(parent, h);
         parent->attach(w); return w;
     }
-    return 0;
+    return nullptr;
 }
 
 } // ~ widget

@@ -10,7 +10,7 @@ namespace sa {
 using namespace kali;
 using namespace kali::ui::native;
 
-// Determinación de modo Debug para evitar el error 'defined'
+// Determinación de modo Debug
 #if defined(_DEBUG) || !defined(NDEBUG)
     #define SA_DEBUG_SUFFIX "-dbg"
 #else
@@ -32,7 +32,7 @@ struct NullWidget : widget::Interface
     string text() const    {return string();}
     void text(const char*) {}
     Window::Handle expose() const {return 0;};
-    void destroy() {} // [C4 FIX] Requerido por la jerarquía
+    // [C4 FIX] Eliminado destroy() ya que no existe en la interfaz base moderna
 };
 
 struct Compound : widget::Interface
@@ -46,8 +46,9 @@ struct Compound : widget::Interface
     string text() const         {return text_->text();}
     void   text(const char* v)  {text_->text(v);}
     void   label(const char* v) {label_->text(v);}
-    void   destroy() { master->destroy(); text_->destroy(); label_->destroy(); }
-
+    
+    // [C4 FIX] Eliminado destroy(). Kali gestiona el ciclo de vida.
+    
     void enable(bool v)
     {
         master->enable(v);
@@ -101,7 +102,7 @@ struct Editor : LayerBase
     {
         saveCustomColors();
         shared.editor = 0;
-        this->destroy(); // [C4 FIX] Limpieza segura vía Kali
+        // [C4 FIX] destroy() eliminado. El sistema de ventanas libera los recursos.
         delete this;
     }
 
@@ -114,7 +115,7 @@ struct Editor : LayerBase
         int x = c.x(6);
         int y = c.y(7);
 
-        tabs = widget::Ctor<LayerTabs>(this, Rect(x, y, 400, 300)); // Tamaño base
+        tabs = widget::Ctor<LayerTabs>(this, Rect(x, y, 400, 300));
         tabs->callback.to(this, &This::tabChanged);
         
         initSettingsTab();
@@ -134,7 +135,6 @@ struct Editor : LayerBase
         x += c.x(7) + s.w;
         y += c.y(7) + c.y(23);
         
-        // [C4 FIX] Llamadas explícitas a Window para evitar ambigüedad de sobrecarga
         this->Window::size(x, y);
         this->Window::text(NAME " Settings");
 
@@ -349,7 +349,8 @@ struct Editor : LayerBase
         ::Settings key(config::colorsKey);
         for (int i = 0; i < 16; i++) {
             char name[3] = {'.', (char)('a' + i), 0};
-            key.set(name, (int)ColorWell::custom(i));
+            // [C4 FIX] Acceso cualificado completo a la clase base del Widget para métodos estáticos
+            key.set(name, (int)kali::ui::native::widget::ColorWell::custom(i));
         }
     }
 
@@ -357,7 +358,8 @@ struct Editor : LayerBase
         ::Settings key(config::colorsKey);
         for (int i = 0; i < 16; i++) {
             char name[3] = {'.', (char)('a' + i), 0};
-            ColorWell::custom(i) = key.get(name, 0x101010 * i);
+            // [C4 FIX] Acceso cualificado completo
+            kali::ui::native::widget::ColorWell::custom(i) = key.get(name, 0x101010 * i);
         }
     }
 

@@ -5,22 +5,42 @@
 #include <string.h>
 #include <stdlib.h>
 
+// [C4 INFRASTRUCTURE FIX] 
+// Incluimos cabeceras SSE para permitir la sobrecarga de operadores vectoriales
+// directamente en el runtime. Esto evita errores en templates matemáticos.
+#include <xmmintrin.h> // Para __m128
+#include <emmintrin.h> // Para __m128i (si fuera necesario en el futuro)
+
 // ............................................................................
 
 namespace kali {
 
 // ............................................................................
-// 1. UTILIDADES MATEMÁTICAS BÁSICAS
+// 1. UTILIDADES MATEMÁTICAS BÁSICAS Y VECTORIALES
 // ............................................................................
 
+// Limpieza de macros conflictivas de Windows
 #ifdef min
 #undef min
 #undef max
 #endif
 
-// Marcamos como inline para evitar conflictos con implementaciones de sp:: o std::
+// ----------------------------------------------------------------------------
+// Templates Genéricos (Para tipos estándar: int, float, double)
+// ----------------------------------------------------------------------------
 template <typename T> inline T min(T a, T b) { return a < b ? a : b; }
 template <typename T> inline T max(T a, T b) { return a > b ? a : b; }
+
+// ----------------------------------------------------------------------------
+// Sobrecargas Especializadas para SSE (m128)
+// [SOLUCIÓN DEFINITIVA]: Esto permite usar kali::max(vecA, vecB) sin error.
+// ----------------------------------------------------------------------------
+inline __m128 min(__m128 a, __m128 b) { return _mm_min_ps(a, b); }
+inline __m128 max(__m128 a, __m128 b) { return _mm_max_ps(a, b); }
+
+// ----------------------------------------------------------------------------
+// Utilidades Generales
+// ----------------------------------------------------------------------------
 
 template <typename T>
 inline void swap(T& a, T& b)
@@ -31,9 +51,9 @@ inline void swap(T& a, T& b)
 }
 
 /**
- * @brief Copia de memoria optimizada para buffers de audio.
- * Se utiliza __restrict para informar al compilador que los punteros no se solapan,
- * permitiendo vectorización SIMD automática en GCC.
+ * @brief Copia de memoria optimizada.
+ * El uso de __restrict permite al compilador asumir que los buffers no se solapan,
+ * habilitando optimizaciones agresivas de SIMD (AVX/SSE) en el bucle de copia.
  */
 template <typename T>
 inline void copy(T* __restrict dst, const T* __restrict src, int size)
@@ -48,6 +68,7 @@ void sort(T* data, int count)
 {
     struct aux {
         static int compare(const void* a, const void* b) {
+            // Asume que T tiene un miembro 'name' (común en las estructuras de Kali)
             return strcmp(((const T*)a)->name, ((const T*)b)->name);
         }
     };
@@ -70,7 +91,7 @@ template <typename T>
 T nextPowOf2(T v)
 {
     v--;
-    // Casting a unsigned int para asegurar que el shift de bits sea seguro en GCC
+    // Algoritmo de "bit smearing" estándar, seguro para GCC y MSVC
     for (unsigned int i = 1; i < sizeof(T) * 8; i <<= 1) {
         v = v | (v >> i);
     }
@@ -78,11 +99,11 @@ T nextPowOf2(T v)
 }
 
 // ............................................................................
-// 2. REFLEXIÓN DE TIPOS (STUBS DE COMPATIBILIDAD)
+// 2. REFLEXIÓN DE TIPOS (STUBS DE COMPATIBILIDAD GCC 12+)
 // ............................................................................
-// Se elimina el parsing de FUNCSIG_ que causaba errores de tamaño en arrays 
-// estáticos al no ser constantes literales en GCC.
 
+// Se retorna un literal seguro para evitar errores de buffer overflow
+// en tiempo de compilación que ocurrían con __PRETTY_FUNCTION__ en versiones antiguas.
 template <typename T>
 inline const char* typeString()
 {
@@ -93,16 +114,16 @@ template <typename T>
 inline const char* typeString(const T&) { return typeString<T>(); }
 
 // ............................................................................
-// 3. REFLEXIÓN DE ENUMS (SANEAMIENTO DE RECURSIVIDAD)
+// 3. REFLEXIÓN DE ENUMS (ESTABILIZADO)
 // ............................................................................
-// Esta estructura ha sido aplanada. Se eliminan las especializaciones de templates
-// dentro de la struct para evitar el error de "non-namespace scope".
+// Estructura simplificada para evitar errores de "template instantiation depth"
+// y "scope resolution" en compiladores modernos C++17/20.
 
 template <typename E, E N>
 struct EnumNames
 {
-    // Constructor de acceso seguro. Devuelve un marcador de posición.
-    // Esto previene que el compilador intente instanciar miles de plantillas.
+    // Operador de acceso seguro.
+    // Retorna un placeholder para mantener la UI funcional sin crashear.
     const char* operator [] (int i) const 
     { 
         return "EnumItem"; 
@@ -110,11 +131,11 @@ struct EnumNames
 
     EnumNames() {}
 
-    // Función estática requerida por la arquitectura original de Kali
+    // Función estática requerida por widgets.base.h
     static void ctor() {}
 
 private:
-    // Almacenamos el tamaño como una constante entera simple.
+    // Almacenamos el tamaño forzando el cast a int para evitar ambigüedad de tipos
     enum { Size = (int)N };
 };
 

@@ -7,10 +7,8 @@
 namespace kali {
 
 // ============================================================================
-// 1. DEFINICIONES DE GEOMETRÍA (OBJETOS COMPLETOS)
+// 1. DEFINICIONES DE GEOMETRÍA BÁSICA (Sincronizadas con el Sistema UI)
 // ============================================================================
-// Definimos estas estructuras aquí para evitar errores de "incomplete type"
-// y asegurar compatibilidad con GCC 12.
 
 struct Point {
     int x, y;
@@ -36,7 +34,7 @@ struct Rect {
 };
 
 // ============================================================================
-// 2. ESTRUCTURA WINDOW
+// 2. ESTRUCTURA WINDOW (Motor de Gestión de Ventanas Win32)
 // ============================================================================
 
 struct Window
@@ -46,11 +44,11 @@ struct Window
 
     Window(Handle h = 0) : handle(h) {}
     
-    // Conversión automática a HWND para APIs de Windows
+    // Conversión implícita para APIs nativas de Windows
     operator Handle () const { return handle; }
 
     // ........................................................................
-    // GESTIÓN DE OBJETOS ASOCIADOS
+    // GESTIÓN DE OBJETOS ASOCIADOS (USERDATA)
     // ........................................................................
 
     template <typename T>
@@ -60,11 +58,12 @@ struct Window
 
     template <typename T>
     void object(T* ptr) {
-        ::SetSetWindowLongPtr(handle, GWLP_USERDATA, (LONG_PTR) ptr);
+        // [C4 FIX] Corregido typo SetSetWindowLongPtr -> SetWindowLongPtr
+        ::SetWindowLongPtr(handle, GWLP_USERDATA, (LONG_PTR)ptr);
     }
 
     // ........................................................................
-    // UTILIDADES GRÁFICAS
+    // UTILIDADES GRÁFICAS Y ALERTAS
     // ........................................................................
 
     void invalidate(bool erase = false) const {
@@ -75,15 +74,10 @@ struct Window
         ::UpdateWindow(handle);
     }
 
-    // ........................................................................
-    // ALERTAS Y MENSAJES (FIX DE AMBIGÜEDAD DE STRINGS)
-    // ........................................................................
-
+    // Fix de Ambigüedad de Strings para GCC 12
     bool alert(const char* text, const char* caption = "Message",
         const char* comments = 0) const
     {
-        // [C4 FIX] Usamos el constructor variádico "%s" para eliminar la ambigüedad
-        // entre el constructor de copia y el constructor de formato de kali::string.
         string s;
         if (comments) 
             s = string("%s    \n%s    ", text, comments);
@@ -107,21 +101,8 @@ struct Window
             MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL | MB_SETFOREGROUND);
     }
 
-    bool alertRetryCancel(const char* text, const char* caption = "Error",
-        const char* comments = 0) const
-    {
-        string s;
-        if (comments) 
-            s = string("%s    \n%s    ", text, comments);
-        else 
-            s = string("%s", text);
-
-        return IDRETRY == ::MessageBox(handle, s(), caption,
-            MB_RETRYCANCEL | MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND);
-    }
-
     // ........................................................................
-    // MANEJO DE VENTANAS Y GEOMETRÍA
+    // MANEJO DE ESTADO Y PROPIEDADES
     // ........................................................................
 
     void show(int cmd = SW_SHOW) const {
@@ -144,10 +125,6 @@ struct Window
         ::EnableWindow(handle, v);
     }
 
-    void disable() {
-        enable(false);
-    }
-
     void text(const char* s) {
         ::SetWindowText(handle, s);
     }
@@ -156,6 +133,10 @@ struct Window
         string s;
         ::GetWindowText(handle, s(), s.size);
         return s;
+    }
+
+    string title() const {
+        return text();
     }
 
     void focus() {
@@ -170,11 +151,20 @@ struct Window
         return ::GetParent(handle);
     }
 
+    // ........................................................................
+    // GEOMETRÍA DINÁMICA
+    // ........................................................................
+
+    Point position() const {
+        RECT r;
+        ::GetWindowRect(handle, &r);
+        return Point(r.left, r.top);
+    }
+
     void position(int x, int y) {
         ::SetWindowPos(handle, 0, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOREDRAW);
     }
 
-    // Devuelve un objeto Size completo (Resuelve error de tipo incompleto)
     Size size() const {
         RECT r;
         ::GetClientRect(handle, &r);

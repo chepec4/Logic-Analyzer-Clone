@@ -1,22 +1,36 @@
 #ifndef VERSION_INCLUDED
 #define VERSION_INCLUDED
 
-// Definiciones estáticas simples para evitar errores de preprocesador
+// -----------------------------------------------------------------------------
+// 1. IDENTIDAD CORPORATIVA (PROTEGIDA)
+// -----------------------------------------------------------------------------
+#define NAME       "C4 Analyzer"
+#define NAME_SHORT "ChepeC4"
+#define COMPANY    "C4 Productions"
+#define COPYRIGHT  "Copyright (c) 2026 C4 Productions"
+
+// -----------------------------------------------------------------------------
+// 2. VERSIÓN DEL SOFTWARE
+// -----------------------------------------------------------------------------
+// Definimos los números directamente para evitar errores de preprocesador en GCC
 #define VER_MAJOR 1
 #define VER_MINOR 0
 #define VER_PATCH 0
 
-// Identidad del Producto
-#define NAME      "C4 Analyzer"
-#define NAME_SHORT "C4Ana"
-#define COMPANY   "C4 Designs"
-#define COPYRIGHT "Copyright (c) 2026 C4 Designs"
-
-// Versiones pre-calculadas para evitar macros complejas
+// Versión numérica para cálculos internos del plugin
 #define VERSION     1.00
-#define VERSION_STR "1.00"
 
-// Formato compatible con recursos de Windows (.rc)
+// Versión en texto para mostrar en la interfaz (Acerca de...)
+#define VERSION_STR "1.0.0"
+
+// Versión formateada para los Recursos de Windows (.rc)
+// Esto soluciona el error de "pasting" al compilar main.res
 #define VERSION_RC  1,0,0,0
+
+// -----------------------------------------------------------------------------
+// NOTA TÉCNICA:
+// Se han eliminado las macros recursivas (PP_CAT, PP_STR) que causaban
+// el error "pasting tokens" en MinGW/GCC 12.
+// -----------------------------------------------------------------------------
 
 #endif // VERSION_INCLUDED

@@ -2,9 +2,14 @@
 #define KALI_WINDOW_INCLUDED
 
 #include "kali/platform.h"
-#include "kali/string.h" // Asegura la definición de string
+#include "kali/string.h"
 
 namespace kali {
+
+// Forward declarations para asegurar que el compilador reconozca los tipos de geometría
+struct Point;
+struct Size;
+template <typename T> struct Rect;
 
 // ............................................................................
 
@@ -16,8 +21,8 @@ struct Window
 
     Window(Handle h = 0) : handle(h) {}
     
-    // Conversión automática a HWND
-    operator Handle () const {return handle;}
+    // Conversión automática a HWND para APIs de Windows
+    operator Handle () const { return handle; }
 
     // ........................................................................
     // GESTIÓN DE OBJETOS ASOCIADOS (USERDATA)
@@ -50,19 +55,18 @@ struct Window
     }
 
     // ........................................................................
-    // ALERTAS Y MENSAJES (CORREGIDO PARA GCC)
+    // ALERTAS Y MENSAJES (CORREGIDO PARA EVITAR AMBIGÜEDAD)
     // ........................................................................
 
     bool alert(const char* text, const char* caption = "Message",
         const char* comments = 0) const
     {
-        // [C4 FIX] Reemplazado operador ternario '?:' por if/else explícito
-        // para evitar error de tipos (const char* vs kali::string)
+        // [C4 FIX] Usamos asignación directa para evitar la ambigüedad del constructor
         string s;
         if (comments) 
-            s = string("%s    \n%s    ", text, comments);
+            s.format("%s    \n%s    ", text, comments);
         else 
-            s = string(text);
+            s = text; // Operación no ambigua
 
         return IDOK == ::MessageBox(handle, s(), caption,
             MB_OK | MB_ICONINFORMATION | MB_TASKMODAL | MB_SETFOREGROUND);
@@ -71,12 +75,11 @@ struct Window
     bool alertYesNo(const char* text, const char* caption = "Question",
         const char* comments = 0) const
     {
-        // [C4 FIX] If/else explícito
         string s;
         if (comments) 
-            s = string("%s    \n%s    ", text, comments);
+            s.format("%s    \n%s    ", text, comments);
         else 
-            s = string(text);
+            s = text;
 
         return IDYES == ::MessageBox(handle, s(), caption,
             MB_YESNO | MB_ICONQUESTION | MB_TASKMODAL | MB_SETFOREGROUND);
@@ -85,19 +88,18 @@ struct Window
     bool alertRetryCancel(const char* text, const char* caption = "Error",
         const char* comments = 0) const
     {
-        // [C4 FIX] If/else explícito
         string s;
         if (comments) 
-            s = string("%s    \n%s    ", text, comments);
+            s.format("%s    \n%s    ", text, comments);
         else 
-            s = string(text);
+            s = text;
 
         return IDRETRY == ::MessageBox(handle, s(), caption,
             MB_RETRYCANCEL | MB_ICONERROR | MB_TASKMODAL | MB_SETFOREGROUND);
     }
 
     // ........................................................................
-    // MANEJO DE VENTANAS
+    // MANEJO DE VENTANAS Y GEOMETRÍA
     // ........................................................................
 
     void show(int cmd = SW_SHOW) const
@@ -155,6 +157,17 @@ struct Window
     Handle parent() const
     {
         return ::GetParent(handle);
+    }
+
+    // Métodos de posición/tamaño optimizados para llamadas internas de Kali
+    void position(int x, int y)
+    {
+        ::SetWindowPos(handle, 0, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOREDRAW);
+    }
+
+    void size(int w, int h)
+    {
+        ::SetWindowPos(handle, 0, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOREDRAW);
     }
 };
 

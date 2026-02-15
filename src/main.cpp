@@ -2,44 +2,43 @@
 #include "main.h"
 #include "kali/app.dll.h"
 
-// ............................................................................
-// VST ENTRY POINT DEFINITION
-// ............................................................................
-// Forzamos la visibilidad global para que el Host (DAW) encuentre la función.
-// ............................................................................
+/**
+ * MOTOR DE ENTRADA VST (ENTRY POINT)
+ * Optimizado para MinGW x64 y compatibilidad con estándar gnu++14.
+ * Respetando la infraestructura de Seven Phases / Kali.
+ */
 
 extern "C" {
-    // Algunos Hosts antiguos buscan 'main' en lugar de 'VSTPluginMain'
-    #define VST_ENTRY VSTPluginMain
-    
-    AEffect* VST_ENTRY(audioMasterCallback audioMaster)
+
+    // Exportación explícita para el Host (DAW)
+    #define VST_EXPORT __attribute__((visibility("default")))
+
+    VST_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
-        // 1. Gestión de Debug (Solo modo desarrollo MSVC)
+        // 1. Inicialización de Debug (Win32 CRT)
         #ifdef _CRTDBG_MAP_ALLOC
             _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
         #endif
 
-        // 2. Configuración de Trazado de Kali
-        // Usamos el namespace explícito para evitar 'not declared' en entornos GCC
+        // 2. Validación inicial del Host
+        if (!audioMaster) return 0;
+
+        // 3. Verificación de versión del SDK VST (Requerido por VST 2.4)
+        if (!audioMaster(0, audioMasterVersion, 0, 0, 0, 0)) return 0;
+
+        // 4. Configuración del motor de traza de Kali
+        // [C4 FIX] Usamos una referencia local para evitar ambigüedad de namespace en GCC 12
         #if defined(DBG) && (DBG > 0)
-            kali::trace.setLevel(kali::trace.Full);
+            try {
+                // Acceso seguro a la instancia global definida en dbgutils.h
+                kali::trace.setLevel(kali::trace.Full);
+            } catch(...) {}
         #endif
 
-        // 3. Validación de Seguridad del Host
-        if (!audioMaster) {
-            return 0;
-        }
-
-        // 4. Verificación de Versión del SDK VST (2400 = VST 2.4)
-        // El primer argumento 0 solicita la versión al Host.
-        if (audioMaster(0, audioMasterVersion, 0, 0, 0, 0) == 0) {
-            // Si el host devuelve 0, no es compatible con esta versión del SDK
-            return 0;
-        }
-
+        // 5. Instanciación Protegida del Plugin
         try {
-            // 5. Instanciación del Plugin
-            // Tras reparar 'sp.h' y 'widgets.h', Plugin ya es un tipo completo.
+            // NOTA: Para que esta línea funcione, 'main.h' DEBE compilarse 
+            // correctamente tras aplicar el parche de 'sp::AlignedNew' en 'sp.h'.
             Plugin* plugin = new Plugin(audioMaster);
             
             if (plugin) {
@@ -47,17 +46,22 @@ extern "C" {
             }
         }
         catch (...) {
-            // Protección contra fallos críticos en la carga de memoria o recursos
+            // Silenciamos fallos críticos para evitar que el DAW se cierre (crash)
             return 0;
         }
 
         return 0;
     }
+
+    // Compatibilidad con Hosts extremadamente antiguos (buscan "main")
+    VST_EXPORT AEffect* main(audioMasterCallback audioMaster) {
+        return VSTPluginMain(audioMaster);
+    }
 }
 
-// ............................................................................
-// NOTA TÉCNICA:
-// El archivo kali/app.dll.h incluido al inicio gestiona automáticamente 
-// el DllMain necesario para Windows, asociando la instancia del DLL 
-// con el objeto 'kali::app'.
-// ............................................................................
+/**
+ * DOCUMENTACIÓN DE INFRAESTRUCTURA:
+ * - 'kali/app.dll.h' inyecta el DllMain necesario para Windows.
+ * - La clase 'Plugin' debe estar definida totalmente en 'main.h'.
+ * - El uso de 'audioMaster' es el único canal de comunicación Host-Plugin.
+ */

@@ -1,22 +1,22 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (V6.0 - Final Production Build)
-# Optimizado para MinGW-w64 / GCC 12.2+
+# C4 ANALYZER - MAKEFILE (V7.0 - Final Precision Build)
+# Optimizado para MinGW-w64 (GCC 12.2+) - Entorno 2026
 # -----------------------------------------------------------------------------
 
 CXX      := g++
+WINDRES  := windres
 RM       := rm -f
 
 # -----------------------------------------------------------------------------
-# FLAGS DE COMPILACIÓN (Rendimiento Máximo y Estabilidad)
+# FLAGS DE COMPILACION (Motor DSP y Compatibilidad)
 # -----------------------------------------------------------------------------
-# -O3: Optimización agresiva para procesamiento de audio.
-# -ffast-math: Acelera cálculos matemáticos (especial para el motor SIMD sp.h).
-# -std=gnu++14: Estándar base compatible con la infraestructura Kali.
-# -ftemplate-depth=1000: Nivel seguro tras corregir la recursión en runtime.h.
-# -msse -msse2 -msse3: Habilita instrucciones vectoriales modernas.
+# -O3 + -ffast-math: Rendimiento critico para el motor de audio SIMD.
+# -mstackrealign: Garantiza que las instrucciones SSE en sp.h no fallen.
+# -fpermissive: Red de seguridad para el codigo de la libreria VST SDK.
+# -ftemplate-depth=1000: Seguro tras simplificar kali/runtime.h.
 # -----------------------------------------------------------------------------
 CXXFLAGS := -O3 -ffast-math -std=gnu++14 -fpermissive -w \
-            -msse -msse2 -msse3 \
+            -msse -msse2 -msse3 -mstackrealign \
             -ftemplate-depth=1000 \
             -Wno-narrowing \
             -static-libgcc -static-libstdc++ \
@@ -24,7 +24,7 @@ CXXFLAGS := -O3 -ffast-math -std=gnu++14 -fpermissive -w \
             -D__GTHREADS
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN
+# RUTAS DE INCLUSION
 # -----------------------------------------------------------------------------
 INC      := -I. \
             -I../libraries \
@@ -35,9 +35,10 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x
 
 # -----------------------------------------------------------------------------
-# LIBRERÍAS Y ENLAZADO
+# LIBRERIAS DEL SISTEMA Y ENLAZADO
 # -----------------------------------------------------------------------------
-LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid
+# El orden es vital: gdi32 y opengl32 para la UI, winmm para el timing de audio.
+LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid -loleaut32
 LDFLAGS  := -shared -s -Wl,--kill-at -Wl,--subsystem,windows
 
 # -----------------------------------------------------------------------------
@@ -49,29 +50,31 @@ RES      := main.res
 TARGET   := ../C4Analyzer.dll
 
 # -----------------------------------------------------------------------------
-# REGLAS DE CONSTRUCCIÓN
+# REGLAS DE CONSTRUCCION
 # -----------------------------------------------------------------------------
 
 all: $(TARGET)
 
-# [LINK] Ensamblado del DLL Final
+# [LINKER] Generacion del binario VST DLL
+# Se asegura que LIBS este al final para resolver dependencias correctamente.
 $(TARGET): $(OBJS) $(RES)
-	@echo [LINKER] Generando binario VST: $@
+	@echo [LINKER] Ensamblando binario final: $@
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(RES) $(LIBS)
 
-# [CXX] Compilación de Código Fuente
+# [CXX] Compilacion de modulos C++
 %.o: %.cpp
-	@echo [CXX] Compilando modulo: $<
+	@echo [CXX] Procesando: $<
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# [RC] Compilación de Recursos de Windows
+# [RC] Compilacion de Recursos (Iconos, Version, Manifiesto)
+# Incluye INC para que windres pueda localizar archivos de cabecera si es necesario.
 $(RES): rc/main.rc
-	@echo [RC] Procesando recursos e iconos: $<
-	windres $(INC) -Irc -i $< -O coff -o $@
+	@echo [RC] Compilando recursos: $<
+	$(WINDRES) $(INC) -Irc -i $< -O coff -o $@
 
-# Limpieza del Directorio
+# Limpieza profunda
 clean:
-	@echo [CLEAN] Eliminando archivos temporales...
+	@echo [CLEAN] Eliminando objetos y binarios...
 	$(RM) $(OBJS) $(RES) $(TARGET)
 
 .PHONY: all clean

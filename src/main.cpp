@@ -3,43 +3,61 @@
 #include "kali/app.dll.h"
 
 // ............................................................................
-// VST ENTRY POINT
+// VST ENTRY POINT DEFINITION
 // ............................................................................
-// Este es el punto de contacto entre el DAW (Host) y el C4 Analyzer.
+// Forzamos la visibilidad global para que el Host (DAW) encuentre la función.
 // ............................................................................
 
-extern "C" AEffect* VSTPluginMain(audioMasterCallback audioMaster)
-{
-    // Inicialización de herramientas de depuración de memoria (Solo MSVC)
-    #ifdef _CRTDBG_MAP_ALLOC
-        _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
-    #endif
+extern "C" {
+    // Algunos Hosts antiguos buscan 'main' en lugar de 'VSTPluginMain'
+    #define VST_ENTRY VSTPluginMain
+    
+    AEffect* VST_ENTRY(audioMasterCallback audioMaster)
+    {
+        // 1. Gestión de Debug (Solo modo desarrollo MSVC)
+        #ifdef _CRTDBG_MAP_ALLOC
+            _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
+        #endif
 
-    // Configuración del nivel de trazado/logs
-    #if defined(DBG) && (DBG > 1)
-        trace.setLevel(trace.Full);
-    #endif
+        // 2. Configuración de Trazado de Kali
+        // Usamos el namespace explícito para evitar 'not declared' en entornos GCC
+        #if defined(DBG) && (DBG > 0)
+            kali::trace.setLevel(kali::trace.Full);
+        #endif
 
-    // Verificación de la versión del Master del Host (DAW)
-    if (!audioMaster) {
+        // 3. Validación de Seguridad del Host
+        if (!audioMaster) {
+            return 0;
+        }
+
+        // 4. Verificación de Versión del SDK VST (2400 = VST 2.4)
+        // El primer argumento 0 solicita la versión al Host.
+        if (audioMaster(0, audioMasterVersion, 0, 0, 0, 0) == 0) {
+            // Si el host devuelve 0, no es compatible con esta versión del SDK
+            return 0;
+        }
+
+        try {
+            // 5. Instanciación del Plugin
+            // Tras reparar 'sp.h' y 'widgets.h', Plugin ya es un tipo completo.
+            Plugin* plugin = new Plugin(audioMaster);
+            
+            if (plugin) {
+                return plugin->getAeffect();
+            }
+        }
+        catch (...) {
+            // Protección contra fallos críticos en la carga de memoria o recursos
+            return 0;
+        }
+
         return 0;
     }
-
-    // audioMasterVersion suele ser 2400 para VST 2.4
-    if (audioMaster(0, audioMasterVersion, 0, 0, 0, 0))
-    {
-        // Instanciación del Plugin. 
-        // Gracias al cierre de namespaces en el Paso 4, 'Plugin' ahora es visible.
-        Plugin* plugin = new Plugin(audioMaster);
-        
-        if (plugin) {
-            return plugin->getAeffect();
-        }
-    }
-
-    // Si llegamos aquí, la inicialización falló
-    trace("%s: failed, wrong master version or allocation error.\n", FUNCTION_);
-    return 0;
 }
 
+// ............................................................................
+// NOTA TÉCNICA:
+// El archivo kali/app.dll.h incluido al inicio gestiona automáticamente 
+// el DllMain necesario para Windows, asociando la instancia del DLL 
+// con el objeto 'kali::app'.
 // ............................................................................

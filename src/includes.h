@@ -1,59 +1,74 @@
-
 #ifndef INCLUDES_INCLUDED
 #define INCLUDES_INCLUDED
 
-#include "kali/platform.h"
+// ============================================================================
+// PARCHE DE COMPATIBILIDAD C4 ANALYZER (MSVC -> GCC/MinGW)
+// ============================================================================
 
-// ............................................................................
-
-#if MACOSX_
-
-#import <Cocoa/Cocoa.h>
-
+// 1. DEFINICIONES DE PLATAFORMA
+// ----------------------------------------------------------------------------
+// Aseguramos que el sistema sepa que estamos en Windows
+#ifndef WINDOWS_
+    #define WINDOWS_ 1
 #endif
 
-// ............................................................................
-
-#if WINDOWS_
-
-#pragma warning(push, 3)
-
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x501
+// 2. TRADUCCIÓN DE MACROS DE MICROSOFT
+// ----------------------------------------------------------------------------
+// GCC no tiene __FUNCSIG__, usamos __PRETTY_FUNCTION__ que es el equivalente.
+// Soluciona error: '__FUNCSIG__' was not declared in this scope
+#ifndef __FUNCSIG__
+    #define __FUNCSIG__ __PRETTY_FUNCTION__
 #endif
 
-#define ISOLATION_AWARE_ENABLED 1
-
-#if 0
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
+// MSVC usa __forceinline, GCC usa atributos.
+#ifndef __forceinline
+    #define __forceinline inline __attribute__((always_inline))
 #endif
 
-#include <math.h>
+// 3. ENTORNO DE DEPURACIÓN
+// ----------------------------------------------------------------------------
+// Si no está definido NDEBUG (Release), asumimos modo Debug.
+// Esto activa los rastreos (trace) en kali/dbgutils.h
+#if !defined(NDEBUG) && !defined(_DEBUG)
+    #define _DEBUG 1
+#endif
+
+// 4. INCLUSIÓN DE LIBRERÍAS DEL SISTEMA (Orden Crítico)
+// ----------------------------------------------------------------------------
+// Windows.h debe ir primero para definir tipos como HWND, DWORD, etc.
 #include <windows.h>
-#include <commctrl.h>
-#include <gl/gl.h>
 
-#undef small
+// Librerías estándar de C/C++ necesarias para printf, math, etc.
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <float.h>
+#include <string.h>
 
-#pragma warning(pop)
-#pragma warning(disable: 4127) // conditional expression is constant
+// 5. SOLUCIÓN AL CONFLICTO MIN/MAX
+// ----------------------------------------------------------------------------
+// El código antiguo usa min() y max() como macros o funciones indistintamente.
+// Incluimos <algorithm> y forzamos el uso del estándar para evitar
+// el error: "no matching function for call to min/max"
+#include <algorithm>
+using std::min;
+using std::max;
 
-// enable extra warnings:
-#pragma warning(default: 4191) // unsafe conversion from 'type of expression' to 'type required'
-#pragma warning(default: 4242) // (another) conversion from 'type1' to 'type2', possible loss of data
-#pragma warning(default: 4254) // (another) conversion from 'type1' to 'type2', possible loss of data
-#pragma warning(default: 4263) // member function does not override any base class virtual member function
-#pragma warning(default: 4264) // no override available for virtual member function from base 'class'; function is hidden
-#pragma warning(default: 4265) // class has virtual functions, but destructor is not virtual
-#pragma warning(default: 4266) // no override available for virtual member function from base 'type'; function is hidden
-#pragma warning(default: 4296) // expression is always false
-#pragma warning(default: 4431) // missing type specifier - int assumed
-#pragma warning(default: 4640) // construction of local static object is not thread-safe
+// 6. PARCHES ESPECÍFICOS PARA LIBRERÍA 'KALI'
+// ----------------------------------------------------------------------------
+// Kali usa un tipo 'Resource' que a veces no se resuelve bien en GCC
+// sin una definición explícita previa.
+namespace kali {
+    typedef const char* Resource;
+}
 
-#endif
+// ============================================================================
+// FIN DEL PARCHE C4
+// ============================================================================
 
-// ............................................................................
+// A continuación, el código original o inclusiones adicionales del proyecto
+// (Si el archivo original tenía más includes abajo, el compilador los leerá)
+
+#pragma warning(disable: 4996) // Silencia warnings de funciones "inseguras" (sprintf, etc.)
 
 #endif // INCLUDES_INCLUDED

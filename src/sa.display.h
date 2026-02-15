@@ -298,7 +298,7 @@ struct Display : DrawData,
                + ((cb & 0xFEFEFEFEu) >> 1);
         gl::color(cc);
 
-        int mx = mousePos.x - r.x + bar;
+        int mx = mousePos.x - r.x - bar;
         int gx = r.w - bar * 2 - 2;
         double freq = freqMin * exp
             (log(freqMax / freqMin) * mx / gx);
@@ -358,15 +358,45 @@ struct Display : DrawData,
         };
 
         const int    size   = settings(avrgTime) / pollTime;
-        const double slope  = 10. / nBands * settings(avrgSlope);
-        const double outset = 6 - .5 * nBands * slope;
+        
+        // --- MODIFICACIÓN LOGIC PRO START ---
+        // Definimos las constantes sagradas de Logic
+        // Slope: 4.5 dB/octava | Referencia: 1000 Hz
+        const double logicSlope = 4.5; 
+        const double logicRef   = 1000.0;
+        
+        // Obtenemos los límites de frecuencia actuales del analizador
+        const double fMin = shared.analyzer->freqMin;
+        const double fMax = shared.analyzer->freqMax;
+        // --- MODIFICACIÓN LOGIC PRO END ---
 
         for (int i = 0; i < nBands; i++)
         {
-            peak[i].tick(.5 * sp::g2dB(p.p[i] + inf), mo);
+            // 1. Calcular frecuencia exacta de la banda actual (i)
+            // Asumimos distribución logarítmica estándar
+            double pct = (double)i / (double)(nBands - 1);
+            double freq = fMin * pow(fMax / fMin, pct);
+            
+            // 2. Calcular la corrección TILT de Logic
+            // Fórmula: 4.5 * log2(freq / 1000)
+            double tilt = logicSlope * (log(freq / logicRef) / log(2.0));
+
+            // 3. Procesar PEAK (La barra rápida)
+            // Convertimos la señal pura a dB
+            double rawPeakDB = sp::g2dB(p.p[i] + inf);
+            // Sumamos el Tilt de Logic
+            double logicPeakDB = rawPeakDB + tilt;
+            
+            // Inyectamos al medidor (mantenemos el factor .5 original del desarrollador para la escala UI)
+            peak[i].tick(.5 * logicPeakDB, mo);
+
+            // 4. Procesar AVERAGE (La línea lenta/promedio)
             double a = p.a[i] * scale;
-            a = sp::g2dB(avrf[i].tick(a, inf, size));
-            avrg[i] = .5 * (outset + a + slope * i);
+            // Convertimos el promedio a dB y le sumamos el tilt
+            double aDB = sp::g2dB(avrf[i].tick(a, inf, size));
+            
+            // Asignamos el valor final con la corrección de Logic
+            avrg[i] = .5 * (aDB + tilt);
         }
 
         draw();

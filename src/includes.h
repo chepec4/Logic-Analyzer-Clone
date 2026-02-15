@@ -1,74 +1,103 @@
 #ifndef INCLUDES_INCLUDED
 #define INCLUDES_INCLUDED
 
-// ============================================================================
-// PARCHE DE COMPATIBILIDAD C4 ANALYZER (MSVC -> GCC/MinGW)
-// ============================================================================
+#include "kali/platform.h"
 
-// 1. DEFINICIONES DE PLATAFORMA
 // ----------------------------------------------------------------------------
-// Aseguramos que el sistema sepa que estamos en Windows
-#ifndef WINDOWS_
-    #define WINDOWS_ 1
-#endif
-
-// 2. TRADUCCIÓN DE MACROS DE MICROSOFT
+// [C4 FIX] CORRECCIÓN CRÍTICA DE FUNCSIG_
+// El error "initializer fails to determine size of 'aux'" ocurre porque
+// kali/platform.h define FUNCSIG_ como __PRETTY_FUNCTION__ (una variable en GCC).
+// Kali intenta hacer 'char aux[] = FUNCSIG_;', lo cual requiere un TEXTO LITERAL.
+// Aquí lo forzamos a ser un texto literal para que compile.
 // ----------------------------------------------------------------------------
-// GCC no tiene __FUNCSIG__, usamos __PRETTY_FUNCTION__ que es el equivalente.
-// Soluciona error: '__FUNCSIG__' was not declared in this scope
-#ifndef __FUNCSIG__
-    #define __FUNCSIG__ __PRETTY_FUNCTION__
+#ifdef FUNCSIG_
+#undef FUNCSIG_
 #endif
+#define FUNCSIG_ "Function"
 
-// MSVC usa __forceinline, GCC usa atributos.
+// ----------------------------------------------------------------------------
+// [C4 FIX] CORRECCIÓN DE __forceinline
+// GCC usa atributos para el inlining forzado.
+// ----------------------------------------------------------------------------
 #ifndef __forceinline
-    #define __forceinline inline __attribute__((always_inline))
+#define __forceinline inline __attribute__((always_inline))
 #endif
 
-// 3. ENTORNO DE DEPURACIÓN
-// ----------------------------------------------------------------------------
-// Si no está definido NDEBUG (Release), asumimos modo Debug.
-// Esto activa los rastreos (trace) en kali/dbgutils.h
-#if !defined(NDEBUG) && !defined(_DEBUG)
-    #define _DEBUG 1
+// ............................................................................
+
+#if MACOSX_
+
+#import <Cocoa/Cocoa.h>
+
 #endif
 
-// 4. INCLUSIÓN DE LIBRERÍAS DEL SISTEMA (Orden Crítico)
-// ----------------------------------------------------------------------------
-// Windows.h debe ir primero para definir tipos como HWND, DWORD, etc.
-#include <windows.h>
+// ............................................................................
 
-// Librerías estándar de C/C++ necesarias para printf, math, etc.
+#if WINDOWS_
+
+// [C4 FIX] Ignorar pragmas de MSVC si estamos en GCC para limpiar la consola
+#ifndef __GNUC__
+#pragma warning(push, 3)
+#endif
+
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600 // [C4 FIX] Subido a Vista (0x0600) para mejor soporte MinGW
+#endif
+
+#define ISOLATION_AWARE_ENABLED 1
+
+// [C4 FIX] Aseguramos definición de debug
+#ifndef _DEBUG
+#define _DEBUG 1
+#endif
+
+#if 0
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+#endif
+
+// [C4 FIX] Inclusiones estándar requeridas antes de windows.h
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <float.h>
-#include <string.h>
 
-// 5. SOLUCIÓN AL CONFLICTO MIN/MAX
-// ----------------------------------------------------------------------------
-// El código antiguo usa min() y max() como macros o funciones indistintamente.
-// Incluimos <algorithm> y forzamos el uso del estándar para evitar
-// el error: "no matching function for call to min/max"
+// [C4 FIX] Solución para el conflicto de min/max entre Windows y C++ estándar
 #include <algorithm>
 using std::min;
 using std::max;
 
-// 6. PARCHES ESPECÍFICOS PARA LIBRERÍA 'KALI'
-// ----------------------------------------------------------------------------
-// Kali usa un tipo 'Resource' que a veces no se resuelve bien en GCC
-// sin una definición explícita previa.
+#include <windows.h>
+#include <commctrl.h>
+#include <GL/gl.h>
+
+#undef small
+
+// [C4 FIX] Parche de Tipos Kali
+// Define 'Resource' aquí para evitar errores de 'typename' en widgets.h
 namespace kali {
     typedef const char* Resource;
 }
 
-// ============================================================================
-// FIN DEL PARCHE C4
-// ============================================================================
+#ifndef __GNUC__
+#pragma warning(pop)
+#pragma warning(disable: 4127) // conditional expression is constant
 
-// A continuación, el código original o inclusiones adicionales del proyecto
-// (Si el archivo original tenía más includes abajo, el compilador los leerá)
+// enable extra warnings:
+#pragma warning(default: 4191) // unsafe conversion from 'type of expression' to 'type required'
+#pragma warning(default: 4242) // (another) conversion from 'type1' to 'type2', possible loss of data
+#pragma warning(default: 4254) // (another) conversion from 'type1' to 'type2', possible loss of data
+#pragma warning(default: 4263) // member function does not override any base class virtual member function
+#pragma warning(default: 4264) // no override available for virtual member function from base 'class'; function is hidden
+#pragma warning(default: 4265) // class has virtual functions, but destructor is not virtual
+#pragma warning(default: 4266) // no override available for virtual member function from base 'type'; function is hidden
+#pragma warning(default: 4296) // expression is always false
+#pragma warning(default: 4431) // missing type specifier - int assumed
+#pragma warning(default: 4640) // construction of local static object is not thread-safe
+#endif
 
-#pragma warning(disable: 4996) // Silencia warnings de funciones "inseguras" (sprintf, etc.)
+#endif
+
+// ............................................................................
 
 #endif // INCLUDES_INCLUDED

@@ -17,15 +17,6 @@ jobs:
         platform: x64
         version: 12.2.0
 
-    # --- NUEVO PASO: DESCARGA DEL VST SDK ---
-    # Descargamos el SDK faltante a una carpeta temporal 'vstsdk_rescue'
-    - name: Descargar VST SDK (Rescue)
-      run: |
-        git clone https://github.com/asb2m10/vstsdk2.4.git ../vstsdk_rescue
-        ls -R ../vstsdk_rescue
-      shell: bash
-    # ----------------------------------------
-
     - name: Compilar C4 Analyzer
       working-directory: src
       run: mingw32-make

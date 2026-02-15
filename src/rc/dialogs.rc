@@ -1,10 +1,11 @@
 // ============================================================================
-// DIALOGS.RC (C4 Analyzer - VERSIÓN FINAL BLINDADA)
+// DIALOGS.RC (Definición visual de ventanas)
+// Ubicación: src/rc/dialogs.rc
 // ============================================================================
 #include <windows.h>
-#include <commctrl.h> 
+#include <commctrl.h>
 
-// Meticulosidad: Subimos un nivel para encontrar el encabezado maestro
+// Importante: Subimos un nivel para encontrar las definiciones de IDs
 #include "../resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
@@ -15,16 +16,15 @@
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
 
-/////////////////////////////////////////////////////////////////////////////
-// Diálogo de Ajustes (SETTINGS)
-/////////////////////////////////////////////////////////////////////////////
-
+// ----------------------------------------------------------------------------
+// DIÁLOGO DE AJUSTES (SETTINGS)
+// ----------------------------------------------------------------------------
 IDD_SETTINGS DIALOGEX 0, 0, 218, 256
 STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VISIBLE
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg 2", 0, 0, 0x0
 BEGIN
-    // Selectores principales vinculados a resource.h
+    // Selectores principales
     COMBOBOX        IDC_COMBO_BANDS, 64, 8, 48, 84, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     
     // Checkboxes de funcionalidad
@@ -32,21 +32,20 @@ BEGIN
     CONTROL         "Hold", IDC_CHECK_HOLD, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 161, 137, 44, 10
     CONTROL         "Promedio", IDC_CHECK_AVRG, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 161, 201, 44, 10
 
-    // Decoración visual (Líneas)
+    // Decoración visual (Líneas divisorias)
     CONTROL         "", -1, "Static", SS_ETCHEDHORZ, 7, 46, 200, 1
     CONTROL         "", -1, "Static", SS_ETCHEDHORZ, 7, 94, 200, 1
 
-    // Etiquetas (Usando -1 para evitar colisiones de ID)
+    // Etiquetas de texto (IDs estáticos -1 para ahorrar recursos)
     LTEXT           "Canal:", -1, 7, 10, 49, 8
     LTEXT           "Bandas/Oct:", -1, 7, 26, 49, 8
     LTEXT           "Nivel", -1, 7, 42, 20, 8
     LTEXT           "Pico", -1, 7, 90, 18, 8
 END
 
-/////////////////////////////////////////////////////////////////////////////
-// Diálogo de Colores (COLORS)
-/////////////////////////////////////////////////////////////////////////////
-
+// ----------------------------------------------------------------------------
+// DIÁLOGO DE EDITOR (COLORS)
+// ----------------------------------------------------------------------------
 IDD_EDITOR DIALOGEX 0, 0, 218, 240
 STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_VISIBLE
 EXSTYLE WS_EX_CONTROLPARENT
@@ -55,14 +54,13 @@ BEGIN
     LTEXT           "Esquema de Color:", -1, 7, 10, 60, 8
     COMBOBOX        400, 57, 8, 111, 84, CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
     
-    // El cuadro de color (Owner Draw para que Kali lo pinte)
+    // Cuadro de color personalizado (Owner Draw)
     CONTROL         "", IDC_COLOR_WELL, "Static", SS_OWNERDRAW | SS_NOTIFY, 7, 38, 40, 12
 END
 
-/////////////////////////////////////////////////////////////////////////////
-// BITMAPS (Rutas relativas para GitHub Actions)
-/////////////////////////////////////////////////////////////////////////////
-
+// ----------------------------------------------------------------------------
+// BITMAPS (Cargados desde la misma carpeta src/rc/)
+// ----------------------------------------------------------------------------
 IDB_TOOLBAR_ON  BITMAP  "toolbar-on.bmp"
 IDB_TOOLBAR_OFF BITMAP  "toolbar-off.bmp"
 

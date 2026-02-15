@@ -10,12 +10,12 @@ jobs:
     
     steps:
     # 1. Bajamos el código del repositorio
-    - name: 📥 Checkout del Código
+    - name: Checkout del Código
       uses: actions/checkout@v4
 
     # 2. Preparamos el compilador GCC 12 (MinGW)
     # Usamos la versión 12.2.0 que es compatible con las correcciones de sintaxis que hicimos
-    - name: ⚙️ Instalar MinGW
+    - name: Instalar MinGW
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: x64
@@ -24,14 +24,14 @@ jobs:
     # 3. Compilación
     # Ejecutamos el Makefile que está dentro de la carpeta 'src'
     # El Makefile está configurado para soltar el DLL en la raíz del proyecto (../C4Analyzer.dll)
-    - name: 🔨 Compilar C4 Analyzer
+    - name: Compilar C4 Analyzer
       working-directory: src
       run: mingw32-make
 
     # 4. Verificación de Resultados
     # Listamos el directorio raíz para confirmar visualmente en el log que el DLL existe.
     # Usamos 'dir' nativo de Windows.
-    - name: 🔍 Verificar Existencia del DLL
+    - name: Verificar Existencia del DLL
       run: dir C4Analyzer.dll
       shell: cmd
 

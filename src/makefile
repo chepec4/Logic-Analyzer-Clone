@@ -15,7 +15,7 @@ CXXFLAGS := -O3 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive \
             -DNAME="\"C4 Analyzer\"" \
             -DCOMPANY="\"C4 Productions\""
 
-# Sustituye la sección INC en tu src/makefile por esta versión corregida:
+# REGLA DE ORO: Agregamos ../libraries/win para que 'kali/platform.h' sea visible
 INC      := -I. \
             -I../libraries \
             -I../libraries/win \
@@ -57,4 +57,5 @@ clean:
 	rm -f *.o *.res ../$(TARGET)
 
 .PHONY: all clean
+
 

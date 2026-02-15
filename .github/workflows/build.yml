@@ -1,4 +1,4 @@
-name: Build VST
+name: Build C4 Analyzer VST
 
 on:
   push:
@@ -6,35 +6,59 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
+    name: Build x86 VST DLL
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
-# Agregamos este paso aquí para auditar los archivos
-    - name: Check Git Status
-      run: git status
-      
-    - name: Set up MinGW 32-bit
+    # 1. Clonar repositorio con historial completo para permitir git checkout en el Makefile
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 
+
+    # 2. Configurar entorno MSYS2 optimizado para 32-bit (Requisito SSE del Punto 1)
+    - name: Set up MSYS2 (MinGW 32-bit)
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW32
-        install: mingw-w64-i686-toolchain make
+        update: true
+        install: >-
+          mingw-w64-i686-toolchain
+          make
+          mingw-w64-i686-gcc
         path-type: inherit
 
-    - name: Compile Plugin
+    # 3. Auditoría de archivos antes de la compilación
+    - name: Pre-Build Audit
       shell: msys2 {0}
       run: |
-        cd src
-        make -f makefile
+        echo "Verificando estructura de carpetas..."
+        ls -R src/
+        git status
 
-    - name: List Files (Debug)
+    # 4. Compilación Maestra (Usando el Makefile corregido)
+    - name: Compile VST Plugin
+      shell: msys2 {0}
+      run: |
+        # Navegamos a la carpeta del proyecto y ejecutamos el build
+        make -f src/makefile
+      env:
+        CXX: i686-w64-mingw32-g++
+
+    # 5. Localización y Debug de Binarios
+    - name: Locate Binaries
       shell: cmd
-      run: dir src\*.dll /s
+      run: |
+        dir *.dll /s
       continue-on-error: true
 
-    - name: Upload DLL
+    # 6. Empaquetado y Subida del Artefacto Final
+    - name: Upload C4 Analyzer DLL
       uses: actions/upload-artifact@v4
       with:
-        name: Logic-Analyzer-VST
-        path: src/*.dll 
+        name: C4-Analyzer-v1.0.9-x86
+        path: |
+          *.dll
+          src/*.dll
+        if-no-files-found: error

@@ -4,16 +4,28 @@
 #include "kali/platform.h"
 #include <xmmintrin.h>
 #include <emmintrin.h>
-#include <math.h>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
 
-// Herencia de constantes base (pi, adn, etc.)
+// Constantes base (pi, adn, ln2, etc.)
 #include "sp/base.h"
 
 // ============================================================================
-// 1. MOTOR SIMD (m128 / m4f)
+// ATRIBUTOS DE COMPILADOR
 // ============================================================================
 
-struct m128 {
+#if defined(_MSC_VER)
+    #define SP_INLINE __forceinline
+#else
+    #define SP_INLINE inline __attribute__((always_inline))
+#endif
+
+// ============================================================================
+// CORE SIMD — ALINEACIÓN DE 16 BYTES (Regla de Oro)
+// ============================================================================
+
+struct alignas(16) m128 {
     union {
         __m128 v;
         float  f[4];
@@ -22,88 +34,112 @@ struct m128 {
     typedef float Type;
     enum { size = 4 };
 
-    __forceinline m128() {}
-    __forceinline m128(__m128 i) : v(i) {}
-    __forceinline m128(float i)  : v(_mm_set_ps1(i)) {}
+    SP_INLINE m128() {}
+    SP_INLINE m128(__m128 i) : v(i) {}
+    SP_INLINE m128(float i)  : v(_mm_set_ps1(i)) {}
 
-    __forceinline operator __m128() const { return v; }
+    SP_INLINE operator __m128() const { return v; }
 
-    __forceinline float& operator[](int i) { return f[i]; }
-    __forceinline const float& operator[](int i) const { return f[i]; }
+    // Acceso directo para depuración y casos específicos
+    SP_INLINE float& operator[](int i) { return f[i]; }
+    SP_INLINE const float& operator[](int i) const { return f[i]; }
 };
 
-// Operadores Vectoriales (Optimización para gnu++14)
-__forceinline m128 operator + (m128 a, m128 b) { return _mm_add_ps(a.v, b.v); }
-__forceinline m128 operator - (m128 a, m128 b) { return _mm_sub_ps(a.v, b.v); }
-__forceinline m128 operator * (m128 a, m128 b) { return _mm_mul_ps(a.v, b.v); }
-__forceinline m128 operator / (m128 a, m128 b) { return _mm_div_ps(a.v, b.v); }
+typedef m128 m4f;
 
-// Comparaciones y Matemáticas de Picos
-__forceinline m128 min(m128 a, m128 b) { return _mm_min_ps(a.v, b.v); }
-__forceinline m128 max(m128 a, m128 b) { return _mm_max_ps(a.v, b.v); }
+// ----------------------------------------------------------------------------
+// OPERADORES VECTORIALES
+// ----------------------------------------------------------------------------
+
+SP_INLINE m128 operator + (m128 a, m128 b) { return _mm_add_ps(a.v, b.v); }
+SP_INLINE m128 operator - (m128 a, m128 b) { return _mm_sub_ps(a.v, b.v); }
+SP_INLINE m128 operator * (m128 a, m128 b) { return _mm_mul_ps(a.v, b.v); }
+SP_INLINE m128 operator / (m128 a, m128 b) { return _mm_div_ps(a.v, b.v); }
+
+// Funciones matemáticas vectoriales
+SP_INLINE m128 min(m128 a, m128 b) { return _mm_min_ps(a.v, b.v); }
+SP_INLINE m128 max(m128 a, m128 b) { return _mm_max_ps(a.v, b.v); }
 
 template <int a, int b, int c, int d>
-__forceinline m128 shuffle(m128 x, m128 y) {
+SP_INLINE m128 shuffle(m128 x, m128 y) {
     return _mm_shuffle_ps(x.v, y.v, _MM_SHUFFLE(d, c, b, a));
 }
 
-__forceinline m128 hsum(m128 x) {
+SP_INLINE m128 hsum(m128 x) {
     __m128 r = _mm_add_ps(x.v, _mm_movehl_ps(x.v, x.v));
     return _mm_add_ss(r, _mm_shuffle_ps(r, r, 1));
 }
 
 // ============================================================================
-// 2. INFRAESTRUCTURA SP (Iteradores y Filtros)
+// NAMESPACE SP — INFRAESTRUCTURA DE AUDIO
 // ============================================================================
 
 namespace sp {
-    typedef ::m128 m128;
-    typedef ::m128 m4f;
 
-    // [C4 FIX] Iterador de Miembros (Requerido por sa.display.h y analyzer.h)
-    // Permite iterar sobre estructuras complejas accediendo solo a un campo.
+    using ::m128;
+    using ::m4f;
+
+    // ------------------------------------------------------------------------
+    // ITERADOR DE MIEMBROS (Requerido por sa.display.h)
+    // ------------------------------------------------------------------------
     template <typename T, typename V, V T::*M>
     struct Iter {
         T* p;
-        Iter(T* p) : p(p) {}
-        __forceinline V& operator[](int i) const { return p[i].*M; }
+        explicit Iter(T* ptr) : p(ptr) {}
+        // [C4 FIX] Devolvemos por valor para evitar error de "discards qualifiers"
+        V operator[](int i) const { return p[i].*M; }
     };
 
-    // [C4 FIX] Iterador de Arreglos (Requerido por el banco de filtros)
+    // ------------------------------------------------------------------------
+    // ITERADOR DE ARREGLOS (Requerido por coefficients.h)
+    // ------------------------------------------------------------------------
     template <typename T, typename V>
     struct IterA {
         V* p;
+        // [C4 FIX] Typedef OBLIGATORIO para coefficients.h:45
+        typedef V Type;
+
         IterA(T* base, int offset = 0) {
-            p = (V*)((char*)base + offset);
+            p = reinterpret_cast<V*>(reinterpret_cast<char*>(base) + offset);
         }
-        __forceinline V& operator[](int i) const { return p[i]; }
+        SP_INLINE V& operator[](int i) { return p[i]; }
     };
 
-    // Gestión de Memoria Alineada (Requerido por main.h)
+    // ------------------------------------------------------------------------
+    // GESTIÓN DE MEMORIA ALINEADA (Requerido por main.h)
+    // ------------------------------------------------------------------------
     template <int Align>
     struct AlignedNew {
-        void* operator new(size_t size) {
-            return _mm_malloc(size, Align);
-        }
-        void operator delete(void* p) {
-            _mm_free(p);
+        void* operator new(size_t size) { return _mm_malloc(size, Align); }
+        void operator delete(void* p)   { _mm_free(p); }
+    };
+
+    // ------------------------------------------------------------------------
+    // FILTROS (Requeridos por analyzer.h)
+    // ------------------------------------------------------------------------
+
+    // Zero Latency Pre-filter
+    struct ZeroLP {
+        enum { State = 1 };
+        static SP_INLINE float tick(float in, float* z) {
+            float out = in + z[0]; z[0] = in; return out;
         }
     };
 
-    // Estructura de Filtro 2-Pole (Topología optimizada para Analizador)
+    // Banco de filtros principal
     struct TwoPoleLPSAx {
         enum { State = 2, Coeff = 3 };
-        static inline_ m128 tick(float in, m4f* z, const m4f* k) {
+        static SP_INLINE m128 tick(float in, m4f* z, const m4f* k) {
+            m128 input(in);
             m128 out = z[0];
-            z[0] = m128(in) * k[0] + z[0] * k[1] + z[1] * k[2];
+            z[0] = input * k[0] + z[0] * k[1] + z[1] * k[2];
             z[1] = out;
             return out;
         }
     };
 
-} // ~ namespace sp
+} // namespace sp
 
-// Inclusiones de extensión
 #include "sp/coefficients.h"
 #include "sp/more.h"
 

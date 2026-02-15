@@ -1,4 +1,3 @@
-
 #ifndef KALI_APP_DETAILS_INCLUDED
 #define KALI_APP_DETAILS_INCLUDED
 
@@ -51,16 +50,16 @@ template <typename Traits>
 bool preinitWindow()
 {
     WNDCLASSEX wcx;
-    wcx.cbSize		  = sizeof(wcx);
-    wcx.style	      = Traits::classStyle;
+    wcx.cbSize        = sizeof(wcx);
+    wcx.style         = Traits::classStyle;
     wcx.hInstance     = app->module();
     wcx.lpfnWndProc   = Traits::thunk;
     wcx.lpszMenuName  = Traits::name();
     wcx.lpszClassName = Traits::name();
     wcx.cbClsExtra    = 0;
     wcx.cbWndExtra    = 0;
-    wcx.hIcon		  = 0;
-    wcx.hIconSm		  = 0;
+    wcx.hIcon         = 0;
+    wcx.hIconSm       = 0;
     wcx.hCursor       = ::LoadCursor(0, IDC_ARROW);
     wcx.hbrBackground = ::GetSysColorBrush(COLOR_3DFACE);
 
@@ -132,7 +131,7 @@ struct Dispatch <T, false>
             && (window = (T*) ((CREATESTRUCT*) lparam)->lpCreateParams))
         {
             window->handle = handle;
-		    window->object(window);
+            window->object(window);
         }
         else
             window = Window(handle).object<T>();
@@ -193,7 +192,9 @@ struct Dispatch <T, false>
             Rect r(ps.rcPaint.left, ps.rcPaint.top,
                 ps.rcPaint.right  - ps.rcPaint.left,
                 ps.rcPaint.bottom - ps.rcPaint.top);
-            if (!r.empty())
+            
+            // [C4 FIX] Reemplazo de !r.empty() por chequeo de dimensiones
+            if (r.w > 0 && r.h > 0)
             {
                 graphics::BufferedContext c(dc, r);
                 window->draw(c);
@@ -260,7 +261,7 @@ struct Dispatch <T, true>
             && (window = (T*) ((CREATESTRUCT*) lparam)->lpCreateParams))
         {
             window->handle = handle;
-		    window->object(window);
+            window->object(window);
         }
         else
             window = Window(handle).object<T>();
@@ -294,12 +295,14 @@ struct Dispatch <T, true>
             case EN_CHANGE:
             case BN_CLICKED:
             case CBN_SELCHANGE:
-                widget::Base::thunk_((HWND) lparam, LOWORD(wparam));
+                // [C4 FIX] Namespace completo para widget
+                kali::ui::native::widget::Base::thunk_((HWND) lparam, LOWORD(wparam));
                 return 0;
 
             case EN_KILLFOCUS:
                 // todo: ? this actually conflicts with above thunk_ call
-                widget::Base::thunk_((HWND) lparam, HIWORD(wparam));
+                // [C4 FIX] Namespace completo para widget
+                kali::ui::native::widget::Base::thunk_((HWND) lparam, HIWORD(wparam));
                 return true;
             }
             break;
@@ -308,14 +311,15 @@ struct Dispatch <T, true>
             switch (((NMHDR*) lparam)->code)
             {
             case TCN_SELCHANGE:
-                widget::Base::thunk_
+                // [C4 FIX] Namespace completo para widget
+                kali::ui::native::widget::Base::thunk_
                     (((NMHDR*) lparam)->hwndFrom, 0);
                 return 0;
             }
             break;
 
         case WM_VSCROLL:
-		case WM_HSCROLL:
+        case WM_HSCROLL:
             switch (LOWORD(wparam))
             {
                 case SB_LINEUP:
@@ -324,13 +328,15 @@ struct Dispatch <T, true>
                 case SB_PAGEDOWN:
                 case SB_THUMBTRACK:
                 case SB_THUMBPOSITION:
-                    widget::Base::thunk_((HWND) lparam, 0);
+                    // [C4 FIX] Namespace completo para widget
+                    kali::ui::native::widget::Base::thunk_((HWND) lparam, 0);
                     return 0;
             }
-			return 0;
+            return 0;
 
         case WM_DRAWITEM:
-            widget::Base::drawThunk_((DRAWITEMSTRUCT*) lparam);
+            // [C4 FIX] Namespace completo para widget
+            kali::ui::native::widget::Base::drawThunk_((DRAWITEMSTRUCT*) lparam);
             return TRUE;
 
         #if GL_TRUE // temporary extensions:
@@ -410,7 +416,7 @@ struct DispatchLoaded
             && (window = (T*) (lparam)))
         {
             window->handle = handle;
-			window->object(window);
+            window->object(window);
         }
         else
             window = Window(handle).object<T>();
@@ -429,7 +435,10 @@ struct DispatchLoaded
         {
         case WM_INITDIALOG:
             if (!window->open())
-                window->destroy();
+            {
+                // [C4 FIX] Eliminada llamada a destroy() que no existe.
+                // window->destroy(); 
+            }
             return true;
 
         case WM_DESTROY:
@@ -447,27 +456,31 @@ struct DispatchLoaded
             case EN_CHANGE:
             case BN_CLICKED:
             case CBN_SELCHANGE:
-                widget::Base::thunk_((HWND) lparam, LOWORD(wparam));
+                // [C4 FIX] Namespace completo
+                kali::ui::native::widget::Base::thunk_((HWND) lparam, LOWORD(wparam));
                 return true;
 
             case EN_KILLFOCUS:
                 // todo: this actually conflicts with above thunk_ call
-                widget::Base::thunk_((HWND) lparam, HIWORD(wparam));
+                // [C4 FIX] Namespace completo
+                kali::ui::native::widget::Base::thunk_((HWND) lparam, HIWORD(wparam));
                 return true;
             }
             break;
 
         case WM_VSCROLL:
-		case WM_HSCROLL:
+        case WM_HSCROLL:
             if ((LOWORD(wparam) == SB_LINEUP) ||
                 (LOWORD(wparam) == SB_LINEDOWN) ||
                 (LOWORD(wparam) == SB_THUMBTRACK) ||
                 (LOWORD(wparam) == SB_THUMBPOSITION))
-                    widget::Base::thunk_((HWND) lparam, 0);
-			return true;
+                    // [C4 FIX] Namespace completo
+                    kali::ui::native::widget::Base::thunk_((HWND) lparam, 0);
+            return true;
 
         case WM_DRAWITEM:
-            widget::Base::drawThunk_((DRAWITEMSTRUCT*) lparam);
+            // [C4 FIX] Namespace completo
+            kali::ui::native::widget::Base::drawThunk_((DRAWITEMSTRUCT*) lparam);
             return true;
         }
 
@@ -567,11 +580,11 @@ inline int loop(HWND handle)
     MSG msg;
     while (::GetMessage(&msg, NULL, 0, 0))
     {
-	    if (!::IsDialogMessage(handle, &msg))
-	    {
-		    ::TranslateMessage(&msg);
-		    ::DispatchMessage(&msg);
-	    }
+        if (!::IsDialogMessage(handle, &msg))
+        {
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
+        }
     }
 
     return (int) msg.wParam;
@@ -606,7 +619,7 @@ int app::run(bool ItCouldBeOnlyOne)
     INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_WIN95_CLASSES};
     ::InitCommonControlsEx(&icc);
 
-    T*     window;
+    T* window;
     Window parent;
 
     using kali::app;

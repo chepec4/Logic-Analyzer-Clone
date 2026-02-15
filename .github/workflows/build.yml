@@ -38,7 +38,7 @@ jobs:
     # 5. Empaquetado
     # Subimos el DLL resultante para que lo puedas descargar.
     # 'if-no-files-found: error' detendrá el proceso en rojo si el DLL no se creó.
-    - name: 📦 Subir Artefacto
+    - name: Subir Artefacto
       uses: actions/upload-artifact@v4
       with:
         name: C4Analyzer-VST

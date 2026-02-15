@@ -11,13 +11,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Clonar repositorio con historial completo para permitir git checkout en el Makefile
+    # 1. Clonado con profundidad total para git checkout
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 
 
-    # 2. Configurar entorno MSYS2 optimizado para 32-bit (Requisito SSE del Punto 1)
+    # 2. Configuración de MSYS2 (Entorno 32-bit puro)
     - name: Set up MSYS2 (MinGW 32-bit)
       uses: msys2/setup-msys2@v2
       with:
@@ -29,36 +29,28 @@ jobs:
           mingw-w64-i686-gcc
         path-type: inherit
 
-    # 3. Auditoría de archivos antes de la compilación
+    # 3. Auditoría Meticulosa (Verifica que libraries esté donde debe)
     - name: Pre-Build Audit
       shell: msys2 {0}
       run: |
-        echo "Verificando estructura de carpetas..."
-        ls -R src/
-        git status
+        echo "Directorio raíz:"
+        ls -F
+        echo "Contenido de libraries:"
+        ls -F libraries/ || echo "ALERTA: Carpeta libraries no encontrada en la raiz"
 
-   # 4. Compilación Maestra corregida
+    # 4. Compilación (La clave es el working-directory)
     - name: Compile VST Plugin
       shell: msys2 {0}
-      working-directory: src  # <--- CRÍTICO: Entramos a la carpeta para que las rutas ../ funcionen
+      working-directory: src
       run: |
         make -f makefile
       env:
         CXX: i686-w64-mingw32-g++
 
-    # 5. Localización y Debug de Binarios
-    - name: Locate Binaries
-      shell: cmd
-      run: |
-        dir *.dll /s
-      continue-on-error: true
-
-    # 6. Empaquetado y Subida del Artefacto Final
+    # 5. Subida del Binario (Busca en la raíz por TARGET := ../)
     - name: Upload C4 Analyzer DLL
       uses: actions/upload-artifact@v4
       with:
         name: C4-Analyzer-v1.0.9-x86
-        path: |
-          *.dll
-          src/*.dll
+        path: "*.dll"
         if-no-files-found: error

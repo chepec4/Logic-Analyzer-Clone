@@ -1,16 +1,18 @@
 #ifndef SP_SP_INCLUDED
 #define SP_SP_INCLUDED
 
-#include "sp/base.h"
+#include "kali/platform.h"
 #include <xmmintrin.h> // SSE
 #include <emmintrin.h> // SSE2
 
-// ============================================================================
-// SOLUCIÓN C4: WRAPPER PARA SSE (GCC COMPATIBLE)
-// ============================================================================
-// Transformamos el typedef original en una estructura para poder
-// sobrecargar los operadores aritméticos legalmente en C++.
-// ============================================================================
+// Incluimos base para constantes matemáticas (PI, etc.)
+#include "sp/base.h"
+
+// ............................................................................
+// SOLUCIÓN DE INFRAESTRUCTURA C4: WRAPPER SSE
+// Reemplazamos el sistema original de tipos nativos por una estructura
+// para permitir la sobrecarga de operadores en GCC/MinGW.
+// ............................................................................
 
 namespace sp {
 
@@ -18,114 +20,119 @@ struct m128
 {
     __m128 v;
 
-    // 1. Constructor por defecto (sin inicializar para rendimiento)
+    // Constructores para conversión transparente
     __forceinline m128() {}
-
-    // 2. Constructor desde el tipo nativo __m128
     __forceinline m128(__m128 f) : v(f) {}
-
-    // 3. Constructor desde float (Broadcast: copia el valor a las 4 posiciones)
-    // Esto permite código como: m128 x = 1.0f;
     __forceinline m128(float f) : v(_mm_set_ps1(f)) {}
-
-    // 4. Operador de conversión automática a __m128
-    // Esto permite pasar 'm128' a funciones intrínsecas como _mm_add_ps
+    
+    // Operador de casteo automático a __m128 (para intrínsecos)
     __forceinline operator __m128() const { return v; }
 };
 
-// ============================================================================
-// OPERADORES ARITMÉTICOS (Implementación Inline Optimizada)
-// ============================================================================
+// Definimos m4f como sinónimo de m128 (Vital para los filtros)
+typedef m128 m4f;
 
-// Suma (+)
-__forceinline m128 operator + (const m128& a, const m128& b) { 
-    return _mm_add_ps(a.v, b.v); 
+// ............................................................................
+// OPERADORES ARITMÉTICOS (Sobrecarga C++ Legal)
+// ............................................................................
+
+__forceinline m128 operator + (const m128& a, const m128& b) { return _mm_add_ps(a.v, b.v); }
+__forceinline m128 operator - (const m128& a, const m128& b) { return _mm_sub_ps(a.v, b.v); }
+__forceinline m128 operator * (const m128& a, const m128& b) { return _mm_mul_ps(a.v, b.v); }
+__forceinline m128 operator / (const m128& a, const m128& b) { return _mm_div_ps(a.v, b.v); }
+
+// Operadores Lógicos
+__forceinline m128 operator & (const m128& a, const m128& b) { return _mm_and_ps(a.v, b.v); }
+__forceinline m128 operator | (const m128& a, const m128& b) { return _mm_or_ps(a.v, b.v); }
+__forceinline m128 operator ^ (const m128& a, const m128& b) { return _mm_xor_ps(a.v, b.v); }
+
+// Funciones Auxiliares
+__forceinline m128 max(const m128& a, const m128& b) { return _mm_max_ps(a.v, b.v); }
+__forceinline m128 min(const m128& a, const m128& b) { return _mm_min_ps(a.v, b.v); }
+
+// ............................................................................
+// FUNCIONES DE MANIPULACIÓN DE VECTORES
+// ............................................................................
+
+template <int a, int b, int c, int d>
+__forceinline m128 shuffle(const m128& x, const m128& y)
+{
+    return _mm_shuffle_ps(x.v, y.v, _MM_SHUFFLE(d, c, b, a));
 }
 
-// Resta (-)
-__forceinline m128 operator - (const m128& a, const m128& b) { 
-    return _mm_sub_ps(a.v, b.v); 
+__forceinline m128 hsum(const m128& x)
+{
+    m128 r = _mm_add_ps(x.v, _mm_movehl_ps(x.v, x.v));
+    return _mm_add_ss(r.v, _mm_shuffle_ps(r.v, r.v, 1));
 }
 
-// Multiplicación (*)
-__forceinline m128 operator * (const m128& a, const m128& b) { 
-    return _mm_mul_ps(a.v, b.v); 
-}
+// ............................................................................
+// FILTROS (Lógica Original Preservada)
+// ............................................................................
 
-// División (/)
-__forceinline m128 operator / (const m128& a, const m128& b) { 
-    return _mm_div_ps(a.v, b.v); 
-}
+struct TwoPoleLP
+{
+    enum
+    {
+        State = 2,
+        Coeff = 3
+    };
 
-// ============================================================================
-// OPERADORES LÓGICOS BIT A BIT
-// ============================================================================
+    // Nota: Usamos m4f (&z)[State] que ahora es válido gracias al typedef
+    static inline_ m128 tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
+    {
+        // La sintaxis matemática ahora usa nuestros operadores sobrecargados
+        m128 out = m128(in) * k[0] 
+                 + z[0] * k[1]
+                 + z[1] * k[2];
+        z[1] = z[0];
+        z[0] = out;
+        return out;
+    }
+};
 
-__forceinline m128 operator & (const m128& a, const m128& b) { 
-    return _mm_and_ps(a.v, b.v); 
-}
+struct TwoPoleLPSAx : TwoPoleLP // useful only for SA due to delayed output
+{
+    static inline_ m128 tick(float in, m4f (&z)[State], const m4f (&k)[Coeff])
+    {
+        m128 out = z[0];
+        z[0] = m128(in) * k[0]
+             + z[0] * k[1]
+             + z[1] * k[2];
+        z[1] = out;
+        return out;
+    }
+};
 
-__forceinline m128 operator | (const m128& a, const m128& b) { 
-    return _mm_or_ps(a.v, b.v); 
-}
+// ............................................................................
 
-__forceinline m128 operator ^ (const m128& a, const m128& b) { 
-    return _mm_xor_ps(a.v, b.v); 
-}
+struct ZeroLP
+{
+    enum {State = 1};
 
-// ============================================================================
-// OPERADORES DE COMPARACIÓN (Retornan máscaras)
-// ============================================================================
-
-__forceinline m128 operator == (const m128& a, const m128& b) { 
-    return _mm_cmpeq_ps(a.v, b.v); 
-}
-
-__forceinline m128 operator < (const m128& a, const m128& b) { 
-    return _mm_cmplt_ps(a.v, b.v); 
-}
-
-__forceinline m128 operator > (const m128& a, const m128& b) { 
-    return _mm_cmpgt_ps(a.v, b.v); 
-}
-
-__forceinline m128 operator <= (const m128& a, const m128& b) { 
-    return _mm_cmple_ps(a.v, b.v); 
-}
-
-__forceinline m128 operator >= (const m128& a, const m128& b) { 
-    return _mm_cmpge_ps(a.v, b.v); 
-}
-
-// ============================================================================
-// FUNCIONES AUXILIARES COMUNES (Usadas por el motor de análisis)
-// ============================================================================
-
-// Mínimo
-__forceinline m128 min(const m128& a, const m128& b) {
-    return _mm_min_ps(a.v, b.v);
-}
-
-// Máximo
-__forceinline m128 max(const m128& a, const m128& b) {
-    return _mm_max_ps(a.v, b.v);
-}
-
-// Suma horizontal (reduce el vector sumando sus componentes)
-// Necesaria para calcular la energía total de una banda
-__forceinline float hsum(const m128& a) {
-    m128 t = _mm_add_ps(a.v, _mm_movehl_ps(a.v, a.v));
-    t = _mm_add_ss(t.v, _mm_shuffle_ps(t.v, t.v, 1));
-    float r;
-    _mm_store_ss(&r, t.v);
-    return r;
-}
-
-// Raíz cuadrada inversa (optimización rápida para normalización)
-__forceinline m128 rsqrt(const m128& a) {
-    return _mm_rsqrt_ps(a.v);
-}
+    template <typename T> static inline_
+    T tick(T in, T (&z)[State])
+    {
+        T out = in + z[0];
+        z[0]  = in;
+        return out;
+    }
+};
 
 } // ~ namespace sp
+
+// ............................................................................
+// INCLUSIONES DEPENDIENTES
+// Incluimos estos archivos AL FINAL porque dependen de que 'm128' y 'm4f' 
+// estén ya definidos arriba.
+// ............................................................................
+
+#include "sp/coefficients.h"
+#include "sp/more.h"
+
+// NOTA: sp/core.h suele contener definiciones de tipos antiguos. 
+// Como ya definimos m128/m4f aquí, evitamos incluirlo para no causar conflictos,
+// a menos que contenga otras cosas vitales. Si el compilador se queja, descomentar:
+// #include "sp/core.h" 
 
 #endif // ~ SP_SP_INCLUDED

@@ -1,6 +1,5 @@
 # -----------------------------------------------------------------------------
 # C4 ANALYZER - MAKEFILE (MinGW / GitHub Actions)
-# Protocolo: gnu++03 | Static Linking
 # -----------------------------------------------------------------------------
 
 CXX      := g++
@@ -9,17 +8,16 @@ CXXFLAGS := -O3 -std=gnu++03 -Wall -Wno-narrowing -fpermissive -Wno-unknown-prag
             -DNDEBUG -DWINDOWS_=1 -D__GTHREADS
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN (MODO RESCATE)
+# RUTAS DE INCLUSIÓN CORREGIDAS
 # -----------------------------------------------------------------------------
-# Agregamos ../vstsdk_rescue para encontrar audioeffectx.h
+# Basado en tu información, las cabeceras están en estas rutas de tu repo:
 INC      := -I. \
             -I../libraries \
             -I../libraries/win \
             -I../libraries/sp \
             -I../libraries/vst \
-            -I../vstsdk_rescue \
-            -I../vstsdk_rescue/public.sdk/source/vst2.x \
-            -I../vstsdk_rescue/pluginterfaces/vst2.x
+            -I../libraries/vst/public.sdk/source/vst2.x \
+            -I../libraries/vst/pluginterfaces/vst2.x
 
 LIBS     := -lgdi32 -luser32 -lkernel32 -lcomdlg32 -lopengl32 -lglu32 -lwinmm -lole32 -luuid
 

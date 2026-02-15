@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
-# C4 ANALYZER - MAKEFILE (V8.0 - Definitive Infrastructure Build)
-# Optimizado para MinGW-w64 (GCC 12.2+) - Entorno x64
+# C4 ANALYZER - MAKEFILE (V10.0 - Definitive Production x64)
+# Optimizado para: Windows Server 2025 | MinGW-w64 (GCC 12.2) | C++17
 # -----------------------------------------------------------------------------
 
 CXX      := g++
@@ -8,22 +8,20 @@ WINDRES  := windres
 RM       := rm -f
 
 # -----------------------------------------------------------------------------
-# FLAGS DE COMPILACIÓN (Motor DSP y Compatibilidad)
+# ARQUITECTURA Y RENDIMIENTO (Regla de Oro: SIMD + Estabilidad)
 # -----------------------------------------------------------------------------
-# -O3 + -ffast-math: Rendimiento crítico para el motor de audio SIMD.
-# -mstackrealign: Vital para que las instrucciones SSE en sp.h no fallen en x86/x64.
-# -ftemplate-depth=2000: Evita colapsos en la jerarquía de widgets de Kali.
+# -O3 + -ffast-math: Rendimiento crítico para el banco de filtros.
+# -std=gnu++17: Requerido por 'if constexpr' en analyzer.h.
+# -fpermissive: Vital para la compatibilidad con la librería Kali (Seven Phases).
 # -----------------------------------------------------------------------------
-CXXFLAGS := -O3 -ffast-math -std=gnu++14 -fpermissive -w \
+CXXFLAGS := -m64 -O3 -ffast-math -std=gnu++17 -fpermissive -w \
             -msse -msse2 -msse3 -mstackrealign \
             -ftemplate-depth=2000 \
-            -Wno-narrowing -Wno-attributes \
             -static-libgcc -static-libstdc++ \
-            -DNDEBUG -DWINDOWS_=1 -D_WIN32_WINNT=0x0600 \
-            -D__GTHREADS
+            -DNDEBUG -DWINDOWS_=1 -D_WIN32_WINNT=0x0600 -D__GTHREADS
 
 # -----------------------------------------------------------------------------
-# RUTAS DE INCLUSIÓN (Estructura de Capas)
+# RUTAS DE INCLUSIÓN
 # -----------------------------------------------------------------------------
 INC      := -I. \
             -I../libraries \
@@ -34,20 +32,21 @@ INC      := -I. \
             -I../libraries/vst/pluginterfaces/vst2.x
 
 # -----------------------------------------------------------------------------
-# LIBRERÍAS DEL SISTEMA Y ENLAZADO
+# LIBRERÍAS Y ENLAZADOR (VST Compliance)
 # -----------------------------------------------------------------------------
-# Orden crítico: comctl32 es necesaria para los widgets (Tabs, Meters).
-# winmm es necesaria para el timing de precisión del analizador.
-LIBS      := -lgdi32 -luser32 -lkernel32 -lcomctl32 -lcomdlg32 -lwinmm -lole32 -luuid -loleaut32
-LDFLAGS   := -shared -s -Wl,--kill-at -Wl,--subsystem,windows -Wl,--add-stdcall-alias
+# --kill-at: Asegura que el DAW encuentre VSTPluginMain sin decoración de nombres.
+# --add-stdcall-alias: Compatibilidad máxima con Ableton, Cubase y Logic.
+# -----------------------------------------------------------------------------
+LIBS     := -lgdi32 -luser32 -lkernel32 -lcomctl32 -lcomdlg32 -lwinmm -lole32 -luuid -loleaut32 -lopengl32
+LDFLAGS  := -m64 -shared -s -Wl,--kill-at -Wl,--subsystem,windows -Wl,--add-stdcall-alias
 
 # -----------------------------------------------------------------------------
 # ARCHIVOS DEL PROYECTO
 # -----------------------------------------------------------------------------
-SRCS      := main.cpp vstsdk-wrapper.cpp
-OBJS      := $(SRCS:.cpp=.o)
-RES       := main.res
-TARGET    := ../C4Analyzer.dll
+SRCS     := main.cpp vstsdk-wrapper.cpp
+OBJS     := $(SRCS:.cpp=.o)
+RES      := main.res
+TARGET   := ../C4Analyzer.dll
 
 # -----------------------------------------------------------------------------
 # REGLAS DE CONSTRUCCIÓN
@@ -59,22 +58,22 @@ all: $(TARGET)
 
 # [LINKER] Generación del binario VST DLL
 $(TARGET): $(OBJS) $(RES)
-	@echo [LINKER] Ensamblando binario final: $@
+	@echo [LINKER] Ensamblando binario de producción: $@
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(RES) $(LIBS)
 
 # [CXX] Compilación de módulos C++
 %.o: %.cpp
-	@echo [CXX] Procesando: $<
+	@echo [CXX] Procesando núcleo: $<
 	$(CXX) $(CXXFLAGS) $(INC) -c $< -o $@
 
-# [RC] Compilación de Recursos (Iconos, Versión, Manifiesto)
+# [RC] Compilación de Recursos (Iconos de Logic, Versión, Manifiesto)
 $(RES): rc/main.rc
-	@echo [RC] Compilando recursos: $<
+	@echo [RC] Compilando recursos visuales: $<
 	$(WINDRES) $(INC) -Irc -i $< -O coff -o $@
 
-# Limpieza profunda
+# Limpieza profunda para regenerar desde cero
 clean:
-	@echo [CLEAN] Eliminando objetos y binarios...
+	@echo [CLEAN] Eliminando objetos y binarios corruptos...
 	$(RM) $(OBJS) $(RES) $(TARGET)
 
 .PHONY: all clean

@@ -16,9 +16,11 @@ CXXFLAGS := -O3 -m32 -msse -msse2 -msse3 -std=gnu++98 -fpermissive \
             -DCOMPANY="\"C4 Productions\""
 
 # RUTAS DE INCLUSIÓN (Meticulosidad en la jerarquía)
-INC      := -I. -I./src -I../libraries -I../libraries/sp -I../libraries/win \
-            -I../libraries/vst -I../libraries/vst/public.sdk/source/vst2.x \
-            -I../libraries/vst/pluginterfaces/vst2.x
+# Sustituye la sección INC en tu src/makefile por esta:
+INC      := -I. -I./src -I./libraries -I./libraries/sp -I./libraries/win \
+            -I./libraries/vst -I./libraries/vst/public.sdk/source/vst2.x \
+            -I./libraries/vst/pluginterfaces/vst2.x \
+            -I../libraries -I../libraries/sp # Mantener por compatibilidad local
 
 # LIBRERÍAS DE SISTEMA (Soporte OpenGL para sa.display.h)
 LIBS     := -static-libgcc -static-libstdc++ \
@@ -57,3 +59,4 @@ clean:
 	rm -f *.o *.res *.dll
 
 .PHONY: all clean
+

@@ -1,8 +1,7 @@
 #ifndef KALI_UI_NATIVE_WIDGETS_INCLUDED
 #define KALI_UI_NATIVE_WIDGETS_INCLUDED
 
-// PRE-DECLARACIÓN CRÍTICA:
-// native.h necesita saber que 'widget' existe.
+// VALIDACIÓN: Pre-declaramos el namespace para evitar el error "huevo o gallina"
 namespace kali { namespace ui { namespace native { namespace widget { struct Interface; } } } }
 
 #include "kali/ui/native.h"
@@ -23,19 +22,11 @@ struct ResourceCtor
 
         Aux(Window::Handle h) : handle(h) {}
 
-        // MOVIDO A PUBLIC PARA QUE sa.editor.h COMPILE
+        // VALIDACIÓN: Estos operadores DEBEN ser públicos.
+        // Si fueran privados, el Editor no podría crear los botones y combos.
     public:
-        template <typename T> 
-        operator T () const 
-        { 
-            return (T)handle; 
-        }
-
-        template <typename T>
-        operator T* () const
-        {
-            return (T*)handle;
-        }
+        template <typename T> operator T () const { return (T)handle; }
+        template <typename T> operator T* () const { return (T*)handle; }
     };
 
     Aux operator () (int id) const
@@ -48,18 +39,19 @@ struct ResourceCtor
 };
 
 // ............................................................................
+// Definiciones completas de los Widgets
+// Se asegura la compatibilidad con los mensajes de Windows (SendMessage)
+// ............................................................................
 
 struct Combo : Interface {
     static const uint32_t style_ = CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP;
     static const char* class_() { return "COMBOBOX"; }
     
-    // Implementación mínima necesaria para Combo
     void add(const char* text) { SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)text); }
     void clear() { SendMessage(handle, CB_RESETCONTENT, 0, 0); }
     int  value() const { return SendMessage(handle, CB_GETCURSEL, 0, 0); }
     void value(int v) { SendMessage(handle, CB_SETCURSEL, v, 0); }
     
-    // Necesario para sa.editor.h:
     void ctor(const Window* parent, const Rect& r) { Interface::create(parent, r, style_, 0, class_()); }
     void ctor(const Window* parent, int id) { handle = GetDlgItem(*parent, id); }
 };
@@ -86,10 +78,11 @@ struct Button : Interface {
     }
 };
 
-// Definición de tipos genéricos que faltaban en mi versión anterior
+// Stubs para completar los tipos requeridos por native.h y evitar errores de "tipo incompleto"
 struct Edit : Interface { static const char* class_() { return "EDIT"; } };
 struct Text : Interface { static const char* class_() { return "STATIC"; } };
 struct TextRight : Interface { static const char* class_() { return "STATIC"; } };
+struct LayerTabs : Interface { static const char* class_() { return "SysTabControl32"; } }; 
 
 // ............................................................................
 

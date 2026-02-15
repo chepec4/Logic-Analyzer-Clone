@@ -1,4 +1,3 @@
-
 #ifndef KALI_UI_NATIVE_INCLUDED
 #define KALI_UI_NATIVE_INCLUDED
 
@@ -13,6 +12,12 @@ namespace native {
 
 // ............................................................................
 
+/**
+ * TYPEDEFS DE ACCESO RÁPIDO:
+ * Meticulosidad: Definimos alias para los Ptr de cada widget.
+ * Esto asegura que sa.display.h pueda declarar elementos de UI
+ * sin preocuparse por la gestión de delete manual.
+ */
 typedef Ptr <widget::Interface> AnyWidget;
 
 typedef Ptr <widget::LayerTabs> LayerTabs;
@@ -32,48 +37,70 @@ typedef Ptr <widget::Text>      Text;
 
 // ............................................................................
 
+/**
+ * LayerBase: La clase base de nuestra visualización.
+ * REGLA DE ORO #2: sa::Display hereda de aquí. 
+ * Proporciona el sistema de dibujo y eventos de ratón para el análisis.
+ */
 struct LayerBase : Window, ui::Layer, widget::Parent
 {
     enum style       {SysCaption, DropShadow = 0};
+    
+    // Implementación de widget::Parent: la capa es su propia ventana
     Window* window() {return this;}
-    bool open()      {return true;}
-    void close()     {}
+    
+    // Ciclo de vida de la capa
+    virtual bool open()  {return true;}
+    virtual void close() {}
 
-    // temporary, move out here:
-    bool draw()                {return false;}
-    void resized()             {}
-    bool mouseDoubleClick()    {return false;}
-    bool mouseMove(int, int)   {return false;}
-    bool keyDown(int, int)     {return false;}
-    bool mouse(int, int, int)  {return false;}
-    bool mouseR(int, int, int) {return false;}
+    // --- INTERFAZ DE EVENTOS (Virtuales para sa::Display) ---
+    // Meticulosidad: Deben ser virtuales para que sa::Display::draw() sea llamado.
+    virtual bool draw()                {return false;}
+    virtual void resized()             {}
+    virtual bool mouseDoubleClick()    {return false;}
+    virtual bool mouseMove(int, int)   {return false;}
+    virtual bool keyDown(int, int)     {return false;}
+    virtual bool mouse(int, int, int)  {return false;}
+    virtual bool mouseR(int, int, int) {return false;}
 
-    bool msgHook(LRESULT&, UINT, WPARAM, LPARAM) {return false;}
+    // Hook de mensajes de Windows para capturar eventos de bajo nivel
+    virtual bool msgHook(LRESULT&, UINT, WPARAM, LPARAM) {return false;}
 
-    // NOTE: inherited objects are already destroyed
-    // here so they won't receive their close()
-    ~LayerBase() {this->destroy();}
+    /**
+     * Destructor: Limpieza automática de la memoria de la UI.
+     * EXTREMADAMENTE METICULOSO: Llama a destroy() de Window para 
+     * cerrar el contexto de OpenGL antes de que el objeto desaparezca.
+     */
+    virtual ~LayerBase() { this->destroy(); }
 
 private:
-    void attach(ReleaseAny* any) {autorelease(any);}
+    // Vincula la gestión de memoria automática (AutoRelease)
+    void attach(ReleaseAny* any) { autorelease(any); }
 
 protected:
+    // Pool de liberación automática: evita memory leaks en el DAW.
     AutoReleasePool<> autorelease;
 };
 
 // ............................................................................
 
+/**
+ * WindowBase: Para ventanas emergentes (como el Editor de Ajustes).
+ */
 struct WindowBase : LayerBase
 {
     enum style {SysCaption = 1};
 
-    bool open()
+    virtual bool open()
     {
         LayerBase::open();
-        centerAt();
+        centerAt(); // Centra la ventana automáticamente al abrir
         return true;
     }
 
+    /**
+     * Centra la ventana respecto a la pantalla o a otra ventana (DAW).
+     */
     void centerAt(const Window* at = 0)
     {
         Rect r = !at ? Rect(screenSize())

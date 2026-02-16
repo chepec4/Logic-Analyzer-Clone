@@ -1,13 +1,14 @@
 name: Build C4 Analyzer (Logic Pro Edition)
 
-# Control de ejecución por cambios en src o librerías
+# Control de ejecución: Solo se dispara si hay cambios reales en el código
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-  workflow_dispatch:
+    paths:
+      - 'src/**'
+      - 'libraries/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch: # Permite ejecución manual desde la pestaña Actions
 
 jobs:
   build-windows:
@@ -21,44 +22,58 @@ jobs:
     steps:
     - name: 1. Checkout del Código
       uses: actions/checkout@v4
+      with:
+        submodules: recursive # Asegura traer librerías si fueran submódulos
 
-    - name: 2. Configurar Entorno MinGW
+    - name: 2. Configurar Entorno MinGW (GCC 12.2)
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: x64
         version: 12.2.0
-        static: 1
+        static: 1 # Enlace estático para que el VST no pida DLLs externas
 
-    - name: 3. Validación de Pre-requisitos
+    - name: 3. Validación de Infraestructura
       run: |
         g++ --version
         mingw32-make --version
-        if (!(Test-Path "src")) { throw "Error: Carpeta 'src' no encontrada." }
+        if (!(Test-Path "src/makefile")) { throw "Error: Makefile no encontrado en src/" }
+        if (!(Test-Path "libraries/kali")) { throw "Error: Estructura de librerías incompleta." }
 
-    - name: 4. Compilación del Plugin (C4 Optimized)
+    - name: 4. Compilación del VST (C4 Architecture)
       working-directory: src
       run: |
-        # Limpieza previa para asegurar un build desde cero
+        # Forzar limpieza para evitar basura de builds locales previos
         mingw32-make clean
-        # Compilación con salida detallada
-        mingw32-make -j2
+        # -j2: Compilación paralela para velocidad en el servidor de GitHub
+        # BUILD=release: Asegura optimizaciones -O3 y fast-math
+        mingw32-make -j2 BUILD=release
 
-    - name: 5. Verificación de Integridad del DLL
+    - name: 5. Verificación de Integridad Binaria
       run: |
-        # El Makefile genera el DLL en la raíz (../C4Analyzer.dll)
-        if (Test-Path "C4Analyzer.dll") {
-          $size = (Get-Item "C4Analyzer.dll").Length
-          echo "Build Exitoso. Tamaño del DLL: $size bytes"
-          # Validamos que no sea un archivo vacío (mínimo 50KB esperado)
-          if ($size -lt 50000) { throw "Error: El DLL generado es demasiado pequeño." }
+        # El Makefile está configurado para soltar el DLL un nivel arriba de src/
+        $dllPath = "C4Analyzer.dll"
+        if (Test-Path $dllPath) {
+          $item = Get-Item $dllPath
+          $sizeKB = [math]::Round($item.Length / 1KB, 2)
+          echo "--------------------------------------------------"
+          echo "BUILD EXITOSO"
+          echo "Archivo: $($item.Name)"
+          echo "Tamaño: $sizeKB KB"
+          echo "--------------------------------------------------"
+          
+          # Validación de peso: Un VST x64 con SSE no debería pesar menos de 200KB
+          # Si pesa menos, es probable que esté vacío o mal enlazado.
+          if ($item.Length -lt 200000) { 
+            throw "Error: El DLL es demasiado pequeño ($sizeKB KB). Revisar enlazado de librerías." 
+          }
         } else {
-          throw "Error: C4Analyzer.dll no fue encontrado en la raíz."
+          throw "Error Crítico: C4Analyzer.dll no se generó en la raíz del proyecto."
         }
 
-    - name: 6. Empaquetar y Subir VST
+    - name: 6. Publicar Artefacto (VST Plugin)
       uses: actions/upload-artifact@v4
       with:
-        name: C4Analyzer-VST-x64
+        name: C4Analyzer-VST2-x64
         path: C4Analyzer.dll
         if-no-files-found: error
-        retention-days: 7
+        retention-days: 14 # Tiempo que el archivo estará disponible para descarga

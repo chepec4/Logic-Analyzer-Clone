@@ -1,8 +1,8 @@
-
 #ifndef KALI_ATOMIC_INCLUDED
 #define KALI_ATOMIC_INCLUDED
 
 #include <windows.h>
+#include <intrin.h> // Necesario para _Interlocked... en x64
 
 // ............................................................................
 
@@ -17,19 +17,17 @@ typedef long atomicType_;
 #define atomicExchange_        _InterlockedExchange
 #define atomicCompareExchange_ _InterlockedCompareExchange
 
-#ifndef _WIN64 // winnt.h declares these functions
-
-void pause_();
+#ifndef _WIN64 
+// Declaraciones explícitas solo para x86 si no están en intrin.h
 long atomicOr_(volatile long*, long);
 long atomicExchange_(volatile long*, long);
 long atomicCompareExchange_(volatile long*, long, long);
+#endif
 
 #pragma intrinsic(pause_)
 #pragma intrinsic(atomicOr_)
 #pragma intrinsic(atomicExchange_)
 #pragma intrinsic(atomicCompareExchange_)
-
-#endif // ~ _WIN64
 
 inline bool atomicTryLock_(volatile long* value)
 {
@@ -37,8 +35,6 @@ inline bool atomicTryLock_(volatile long* value)
 }
 
 } // ~ extern "C"
-
-// ............................................................................
 
 namespace kali {
     inline void yield_()                      {::SwitchToThread();}
@@ -51,8 +47,6 @@ namespace kali {
 
 namespace kali   {
 namespace atomic {
-
-// ............................................................................
 
 struct Lock
 {
@@ -68,13 +62,12 @@ private:
     Type value;
     Lock(const Lock&);
     Lock& operator = (const Lock&);
-    template <typename T> operator T () const;
-
+    
     void lock_()
     {
         for (;;)
         {
-            int spin = 0x333; // fixme
+            int spin = 0x333; 
             while (--spin)
             {
                 if (trylock())
@@ -86,11 +79,7 @@ private:
     }
 };
 
-// ............................................................................
-
 } // ~ namespace atomic
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ KALI_ATOMIC_INCLUDED

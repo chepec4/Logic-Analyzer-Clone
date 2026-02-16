@@ -1,4 +1,3 @@
-
 #ifndef KALI_UI_NATIVE_DETAILS_INCLUDED
 #define KALI_UI_NATIVE_DETAILS_INCLUDED
 
@@ -6,31 +5,30 @@
 #include <commctrl.h>
 #include "kali/dbgutils.h"
 
-// ............................................................................
-
 namespace kali    {
 namespace ui      {
 namespace native  {
 namespace details {
 
-// ............................................................................
-
-inline Window::Handle cloneWindow
-    (Window::Handle window, int styleRemove = 0, int styleAdd = 0, bool destroy = false)
+// Clonado de ventana (útil para controles complejos heredados)
+inline Window::Handle cloneWindow(Window::Handle window, int styleRemove = 0, int styleAdd = 0, bool destroy = false)
 {
     string class_, text;
-    ::GetClassName(window, class_(), class_.size);
-    ::GetWindowText(window, text(), text.size);
-    int style = ::GetWindowLong(window, GWL_STYLE);
+    ::GetClassNameA(window, class_(), class_.size);
+    ::GetWindowTextA(window, text(), text.size);
+    
+    // [C4 FIX] x64 Compliance: GetWindowLongPtr en lugar de GetWindowLong
+    LONG_PTR style = ::GetWindowLongPtr(window, GWL_STYLE);
     style = (style & ~styleRemove) | styleAdd;
-    int styleEx = ::GetWindowLong(window, GWL_EXSTYLE);
+    LONG_PTR styleEx = ::GetWindowLongPtr(window, GWL_EXSTYLE);
 
     RECT r;
     Window::Handle parent = ::GetParent(window);
     ::GetWindowRect(window, &r);
-    ::MapWindowPoints(0, parent, (POINT*) &r, 2);
+    // MapWindowPoints con nullptr convierte de pantalla a cliente del padre
+    ::MapWindowPoints(nullptr, parent, (POINT*) &r, 2);
 
-    // workaround for a Combo to get exact clone:
+    // Workaround para ComboBox: obtener el tamaño real incluyendo el drop list
     if (style & CBS_DROPDOWNLIST)
     {
         RECT rr;
@@ -39,29 +37,24 @@ inline Window::Handle cloneWindow
         style |= ~styleRemove & WS_VSCROLL;
     }
 
-    Window::Handle handle = CreateWindowEx
-        (styleEx, class_, text, style,
-        r.left, r.top, r.right - r.left,
-        r.bottom - r.top, parent, 0, app->module(), 0);
+    Window::Handle handle = ::CreateWindowExA(
+        styleEx, class_, text, style,
+        r.left, r.top, r.right - r.left, r.bottom - r.top,
+        parent, nullptr, ::GetModuleHandle(nullptr), nullptr
+    );
 
-    if (handle)
-    {
-        ::SendMessage(handle, WM_SETFONT,
-            ::SendMessage(window, WM_GETFONT, 0, 0), 0);
-
-        if (destroy)
-            ::DestroyWindow(window);
-
-        return handle;
+    // Clonar la fuente original
+    if (handle) {
+        HFONT font = (HFONT)::SendMessage(window, WM_GETFONT, 0, 0);
+        ::SendMessage(handle, WM_SETFONT, (WPARAM)font, 0);
     }
 
-    trace("%s: CreateWindow failed [%i]\n", FUNCTION_, ::GetLastError());
-    return 0;
+    if (destroy) ::DestroyWindow(window);
+
+    return handle;
 }
 
-// ............................................................................
-// temporary here:
-
+// Wrapper seguro para carga dinámica de APIs (DLLs del sistema)
 template <typename F>
 struct DynamicApi
 {
@@ -69,41 +62,38 @@ struct DynamicApi
     operator bool() const {return !!func;}
 
     DynamicApi(const char* lib, const char* f) {ctor(lib, f);}
-    ~DynamicApi() {::FreeLibrary(module);}
+    ~DynamicApi() { if (module) ::FreeLibrary(module); }
 
 private:
     HMODULE module;
-    F*      func;
+    F* func;
 
     DynamicApi(const DynamicApi&);
     DynamicApi& operator = (const DynamicApi&);
-    template <typename T> operator T () const;
 
     void ctor(const char* lib, const char* f)
     {
-        func   = 0;
-        module = ::LoadLibrary(lib);
-        if (!module)
-            return trace("%s: LoadLibrary(%s) failed [%i]\n",
-                FUNCTION_, lib, ::GetLastError());
+        func   = nullptr;
+        module = ::LoadLibraryA(lib);
+        if (!module) {
+            // trace("%s: LoadLibrary(%s) failed [%i]\n", FUNCTION_, lib, ::GetLastError());
+            return;
+        }
 
         #pragma warning(push)
-        #pragma warning(disable: 4191)
+        #pragma warning(disable: 4191) // Ignorar warning de cast de puntero de función
         func = (F*) ::GetProcAddress(module, f);
-        if (!func)
-            trace("%s: GetProcAddress(%s) failed [%i]\n",
-                FUNCTION_, f, ::GetLastError());
         #pragma warning(pop)
+        
+        if (!func) {
+            // trace("%s: GetProcAddress(%s) failed [%i]\n", FUNCTION_, f, ::GetLastError());
+        }
     }
 };
-
-// ............................................................................
 
 } // ~ namespace details
 } // ~ namespace native
 } // ~ namespace ui
 } // ~ namespace kali
 
-// ............................................................................
-
-#endif // ~ KALI_UI_NATIVE_WIDGETS_INCLUDED
+#endif

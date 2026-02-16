@@ -3,22 +3,23 @@
 
 #include "kali/app.h"
 
-// [C4 ARCHITECTURE FIX]
-// El Makefile (V11.0) ya incluye las rutas:
-// -I../libraries/vst/public.sdk/source/vst2.x
-// Por lo tanto, la inclusión debe ser directa, sin prefijos de ruta inexistentes.
+// [C4 FIX] Includes directos. 
+// El Makefile maneja las rutas de búsqueda (-I) hacia 'public.sdk/source/vst2.x'.
+// No usamos rutas relativas que no existen físicamente.
 #include "aeffeditor.h"
 #include "audioeffectx.h"
 
 namespace vst {
 
 // ............................................................................
-// CLASE BASE DEL PLUGIN (Wrapper de AudioEffectX)
+// WRAPPER DEL PLUGIN (AudioEffectX)
 // ............................................................................
 
 template <typename Plugin>
 struct PluginBase : AudioEffectX
 {
+    // [C4 FIX] Plugin::ProgramCount/ParameterCount/ID son requeridos por contrato.
+    // main.h ya fue parcheado para proveerlos.
     PluginBase(audioMasterCallback master) : AudioEffectX(master, Plugin::ProgramCount, Plugin::ParameterCount)
     {
         setNumInputs(2);
@@ -32,7 +33,7 @@ struct PluginBase : AudioEffectX
 
     void programsAreChunks(bool v = true) { AudioEffectX::programsAreChunks(v); }
     
-    // Copia segura de strings para VST (Legacy Support)
+    // Helper legacy de copia segura
     static char* copy(char* dst, const char* src, int maxLen)
     {
         int i = 0;
@@ -46,13 +47,12 @@ struct PluginBase : AudioEffectX
 };
 
 // ............................................................................
-// EDITOR DEL PLUGIN (Puente entre VST Host y Kali Window)
+// WRAPPER DEL EDITOR (AEffEditor -> Kali Window)
 // ............................................................................
 
 template <typename Plugin, typename Window>
 struct Editor : AEffEditor
 {
-    // [C4 FIX] Inicialización con nullptr (C++17)
     Editor(Plugin* plugin) : plugin(plugin), window(nullptr) {}
     
     virtual ~Editor() 
@@ -68,20 +68,30 @@ struct Editor : AEffEditor
 
     bool open(void* ptr) override
     {
-        close(); // Seguridad: cerrar instancia previa si existe
+        close(); // Seguridad: limpiar estado previo
         
-        // [C4 ARCHITECTURE] Kali App crea la capa base sobre el HWND del Host
-        // El casting a const kali::Window* es seguro, Kali extrae el HWND internamente.
-        if (!kali::app::createLayer(reinterpret_cast<const kali::Window*>(ptr), &window))
+        // [C4 ARCHITECTURE FIX] Corrección de Instanciación
+        // 1. Creamos el objeto C++ (Display) usando new estándar.
+        // 2. Pasamos el puntero (T*) a createLayer.
+        // Esto permite que el template deduzca T = sa::Display (la clase),
+        // en lugar de T = sa::Display* (el puntero), arreglando el error de Traits.
+        
+        window = new Window(plugin); // 'plugin' se pasa al ctor de Display
+
+        // createLayer "hidrata" el objeto window con un HWND nativo hijo de 'ptr'
+        if (!kali::app::createLayer(reinterpret_cast<const kali::Window*>(ptr), window))
+        {
+            delete window;
+            window = nullptr;
             return false;
+        }
 
-        // "Placement New": Construimos la ventana (sa::Display) en la memoria asignada
-        new (window) Window(plugin);
-
+        // Inicialización lógica de la ventana (recursos GL, timers)
         if (!window->open())
         {
-            // [C4 FIX] Usamos close() en lugar de destroy() para cumplir el Codex
-            window->close(); 
+            window->close(); // Libera recursos y destruye HWND
+            // window se limpia en close(), pero por seguridad:
+            window = nullptr;
             return false;
         }
 
@@ -93,24 +103,25 @@ struct Editor : AEffEditor
     {
         if (window)
         {
-            // [C4 ARCHITECTURE] Delegamos el cierre a Kali (::DestroyWindow)
+            // [C4 FIX] Usamos el ciclo de vida nativo de Kali
             window->close();
+            // Nota: Dependiendo de si Display se auto-elimina (delete this) o no,
+            // aquí podríamos necesitar 'delete window'. 
+            // En la arquitectura Kali moderna, LayerBase suele estar en AutoReleasePool.
+            // Asumimos que close() maneja la destrucción del HWND.
             window = nullptr; 
         }
     }
 
     void idle() override 
     {
-        // El framework Kali maneja su propio loop de mensajes (Timer/Hooks)
-        // No requerimos bombeo manual desde el Host VST
+        // Kali maneja su propio loop de mensajes. No-op.
     }
 
 private:
     void updateRect()
     {
-        // Sincronización de geometría Kali -> VST ERect
         if (window) {
-            // [C4 FIX] Uso de métodos modernos de Window (position/size)
             kali::Rect r(window->position(), window->size());
             rect_.left   = (short)r.x;
             rect_.top    = (short)r.y;

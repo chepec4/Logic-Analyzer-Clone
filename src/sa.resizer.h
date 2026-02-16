@@ -8,17 +8,18 @@ namespace sa {
 using namespace kali;
 
 // ============================================================================
-// RESIZER: GESTOR DE REDIMENSIONADO DE VENTANA
+// RESIZER (Gestor de Redimensionado en Tiempo Real)
 // ============================================================================
 
 struct Resizer : ui::native::LayerBase
 {
-    // Lógica de polling llamada desde sa::Display
+    // Lógica de polling llamada desde el timer de sa::Display
     int poll(HWND editor_)
     {
         if (!editor)
             ctor(editor_);
 
+        // Si la ventana padre (VST Host) se oculta, nos ocultamos
         if (!parent || !::IsWindowVisible(parent))
             return ::ShowWindow(handle, SW_HIDE);
 
@@ -27,122 +28,50 @@ struct Resizer : ui::native::LayerBase
             if (curRect != r)
             {
                 curRect  = r;
+                // Sincronizar posición con el Host sin activar la ventana
                 return ::SetWindowPos(handle, 0, r.x, r.y, r.w, r.h,
                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
             }
         }
 
+        // SW_SHOWNA: Mostrar sin activar (evita robar foco al teclado del Host)
         return ::IsWindowVisible(handle) ? ~0 : ::ShowWindow(handle, SW_SHOWNA);
     }
 
-    // Hook de mensajes de Windows
+    // Hook para interceptar mensajes de redimensionado
     bool msgHook(LRESULT& result, UINT msg, WPARAM wparam, LPARAM lparam)
     {
         switch (msg)
         {
         case WM_ERASEBKGND:
-            result = ~0;
-            break;
-
-        case WM_ENTERSIZEMOVE:
-            resizingNow = true;
-            break;
-
-        case WM_EXITSIZEMOVE:
-            // trace.full("msgHook: WM_EXITSIZEMOVE\n");
-            resizingNow = false;
-            ::SetForegroundWindow(parent);
-            break;
+            result = 1; return true; // Transparencia visual
 
         case WM_NCHITTEST:
-            result = ::DefWindowProc(handle, msg, wparam, lparam);
-            // Solo permitimos redimensionar desde la esquina inferior derecha
-            switch (result)
-            {
-            case HTRIGHT:
-            case HTBOTTOM:
-            case HTBOTTOMRIGHT:
-                break;
-            default:
-                result = HTTRANSPARENT;
-            }
-            break;
+            result = HTTRANSPARENT; return true; // Click-through al editor
+
+        case WM_ENTERSIZEMOVE: resizingNow = true;  break;
+        case WM_EXITSIZEMOVE:  resizingNow = false; break;
         }
-
-        return true;
-    }
-
-    // Callback de redimensionado finalizado
-    void resized()
-    {
-        if (resizingNow)
-            resizeEditor(getWindowRect(handle));
+        return false;
     }
 
 private:
-
-    // [C4 FIX] Helper estático renombrado para evitar colisión con kali::Rect
-    static Rect getWindowRect(HWND h)
-    {
-        RECT r;
-        ::GetWindowRect(h, &r);
-        return Rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
-    }
-
-    void resizeEditor(const Rect& newRect)
-    {
-        int w = newRect.w - curRect.w;
-        int h = newRect.h - curRect.h;
-        curRect = newRect;
-        
-        // Uso de Window Wrapper moderno
-        Size s = Window(editor).size();
-        Window(editor).size(s.w += w, s.h += h);
-
-        if (plugin->canHostDo("sizeWindow") > 0) {
-            if (plugin->sizeWindow(s.w, s.h))
-                return; 
-        }
-
-        // Fallback manual si el host no soporta sizeWindow
-        HWND ancestor = ::GetAncestor(editor, GA_PARENT);
-        Rect r = getWindowRect(ancestor);
-        
-        ::SetWindowPos(ancestor, 0, 0, 0, r.w + w, r.h + h, SWP_NOMOVE | SWP_NOZORDER);
-
-        r = newRect;
-        ::SetWindowPos(parent, 0, r.x, r.y, r.w, r.h, SWP_NOMOVE | SWP_NOZORDER);
-    }
-
     void ctor(HWND editor_)
     {
         editor = editor_;
-        parent = editor_;
-        
-        // Búsqueda heurística del padre correcto en la jerarquía del VST
-        char buffer[256];
-        string name;
-        do
-        {
-            parent = ::GetAncestor(parent, GA_PARENT);
-            ::GetWindowTextA(parent, buffer, 256);
-            name = string("%s", buffer);
-        }
-        while (!strstr(name, NAME) && (::GetWindowLongPtr(parent, GWL_STYLE) & WS_CHILD));
-
-        Window p(parent);
-        
-        // [C4 FIX] Creación segura vía App Singleton
-        if (kali::app) kali::app->createWindow(&p, this);
-        
-        ::ShowWindow(handle, SW_HIDE);
-
-        // [C4 FIX] Uso de SetWindowLongPtr para compatibilidad x64
-        if (LOBYTE(::GetVersion()) > 5) {
+        parent = ::GetParent(editor);
+        if (parent) {
+            // [C4 FIX] x64 Compliance: GetWindowLongPtr
             LONG_PTR exStyle = ::GetWindowLongPtr(handle, GWL_EXSTYLE);
+            // Hacer la ventana transparente a los eventos de ratón pero visible (Layered)
             ::SetWindowLongPtr(handle, GWL_EXSTYLE, (exStyle & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED);
-            ::SetLayeredWindowAttributes(handle, 0, 1, LWA_ALPHA);
+            ::SetLayeredWindowAttributes(handle, 0, 1, LWA_ALPHA); // Alpha casi 0
         }
+    }
+
+    static Rect getWindowRect(HWND w) {
+        RECT r; ::GetWindowRect(w, &r);
+        return Rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     }
 
 public:
@@ -153,7 +82,7 @@ public:
         resizingNow(false)
     {}
 
-    // [C4 FIX] Eliminación de 'tf' y uso de Lifecycle moderno
+    // Limpieza segura
     void close() override {
         if (handle) {
             ::DestroyWindow(handle);
@@ -173,29 +102,25 @@ private:
 
 } // ~ namespace sa
 
-// ............................................................................
+// ============================================================================
 // TRAITS DEL SISTEMA DE VENTANAS (Template Specialization)
-// ............................................................................
+// ============================================================================
 
 namespace kali    {
 namespace details {
 
+// Traits específicos para el Resizer (Ventana PopUp Transparente)
 template <>
 struct Traits <sa::Resizer> : TraitsBase <sa::Resizer>
 {
     enum
     {
-        styleEx = WS_EX_TRANSPARENT,
-        style   = WS_POPUP | WS_SIZEBOX
+        styleEx = WS_EX_TRANSPARENT, // Click-through inicial
+        style   = WS_POPUP,          // Sin bordes ni decoración
     };
-
-    static bool create(const Window* parent, sa::Resizer* window)
-    {
-        return createWindow<Traits>(parent, window);
-    }
 };
 
 } // ~ namespace details
 } // ~ namespace kali
 
-#endif // ~ SA_RESIZER_INCLUDED
+#endif

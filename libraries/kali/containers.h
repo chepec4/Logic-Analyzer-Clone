@@ -1,15 +1,10 @@
-
 #ifndef KALI_CONTAINERS_INCLUDED
 #define KALI_CONTAINERS_INCLUDED
 
 #include "kali/types.h"
 #include "kali/runtime.h"
 
-// ............................................................................
-
 namespace kali {
-
-// ............................................................................
 
 template <typename T>
 struct List
@@ -32,10 +27,10 @@ struct List
     }
 
     explicit List(int n = 16)
-        : data(n ? new T[n] : 0), size_(0), capacity(n) {}
+        : data(n ? new T[n] : nullptr), size_(0), capacity(n) {}
 
     List(const List& list) :
-        data(list.capacity ? new T[list.capacity] : 0),
+        data(list.capacity ? new T[list.capacity] : nullptr),
         size_(list.size_),
         capacity(list.capacity) {copy(data, list.data, size_);}
 
@@ -46,10 +41,9 @@ struct List
         return *this;
     }
 
-    ~List() {delete [] data;}
+    ~List() {if (data) delete [] data;}
 
 private:
-
     void grow()
     {
         capacity = (capacity + 8) * 2;
@@ -64,7 +58,6 @@ private:
         kali::swap(capacity, list.capacity);
     }
 
-private:
     iterator data;
     int      size_;
     int      capacity;
@@ -73,7 +66,7 @@ private:
 // ............................................................................
 
 template <typename T = void>
-struct AutoReleasePool // FIXME: rename to AutoReleaseList
+struct AutoReleasePool
 {
     typedef List<T*> Pool;
     typedef typename Pool::iterator iterator;
@@ -100,12 +93,14 @@ private:
     AutoReleasePool& operator = (const AutoReleasePool&);
 };
 
+// Especialización para void (Manejador de ReleaseAny)
 template <>
 struct AutoReleasePool <void>
 {
     AutoReleasePool() {}
     explicit AutoReleasePool(int n) : pool(n) {}
 
+    // Public API: Operator ()
     template <typename T> T* operator () (T* ptr)
     {
         add(ptr, ptr);
@@ -115,10 +110,8 @@ struct AutoReleasePool <void>
     void release() {pool.release();}
 
 private:
-
+    // Internal helpers - Private to enforce type safety
     template <typename T> void add(T* ptr, ReleaseAny*) {pool(ptr);}
-
-    #if 1
 
     template <typename T> void add(T* ptr, void*)
     {
@@ -128,20 +121,12 @@ private:
             Aux(T* p) : p(p) {}
             ~Aux() {delete p;}
         };
-
         pool(new Aux(ptr));
     }
 
-    #endif
-
-private:
     AutoReleasePool <ReleaseAny> pool;
 };
 
-// ............................................................................
-
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ KALI_CONTAINERS_INCLUDED

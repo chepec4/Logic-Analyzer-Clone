@@ -2,126 +2,64 @@
 #define KALI_UI_NATIVE_INCLUDED
 
 #include "kali/ui/native/widgets.base.h"
-#include "kali/ui/native/widgets.h" 
 
-namespace kali   {
-namespace ui      {
+namespace kali {
+namespace ui {
 namespace native {
 
-// ............................................................................
-// 1. TYPEDEFS (Punteros Inteligentes para Widgets)
-// ............................................................................
+// [C4 MASTER FIX] Declaraciones adelantadas para romper la dependencia circular con widgets.h
+namespace widget {
+    struct Interface;
+    struct Button;
+    struct Combo;
+    struct Text;
+    struct Edit;
+    struct Toggle;
+    struct Toolbar;
+    struct ColorWell;
+    struct Stepper;
+    struct Fader;
+}
 
-typedef Ptr <widget::Interface> AnyWidget;
-typedef Ptr <widget::Button>    Button;
-typedef Ptr <widget::Combo>     Combo;
-typedef Ptr <widget::Text>      Text;
-typedef Ptr <widget::Text>      TextRight;
-typedef Ptr <widget::Text>      Label;
-typedef Ptr <widget::Edit>      Edit;
-typedef Ptr <widget::Toggle>    Toggle;
-typedef Ptr <widget::Toolbar>   Toolbar;
-typedef Ptr <widget::ColorWell> ColorWell;
-typedef Ptr <widget::Stepper>   Stepper;
-typedef Ptr <widget::Fader>     Fader;
+// 1. TYPEDEFS (Punteros Inteligentes)
+typedef Ptr<widget::Interface> AnyWidget;
+typedef Ptr<widget::Button>    Button;
+typedef Ptr<widget::Combo>     Combo;
+typedef Ptr<widget::Text>      Text;
+typedef Ptr<widget::Text>      TextRight;
+typedef Ptr<widget::Text>      Label;
+typedef Ptr<widget::Edit>      Edit;
+typedef Ptr<widget::Toggle>    Toggle;
+typedef Ptr<widget::Toolbar>   Toolbar;
+typedef Ptr<widget::ColorWell> ColorWell;
+typedef Ptr<widget::Stepper>   Stepper;
+typedef Ptr<widget::Fader>     Fader;
 
-// ............................................................................
-// 2. WINDOW BASE (Base Nativa Win32)
-// ............................................................................
-
-struct WindowBase : Window
-{
+// 2. WINDOW BASE
+struct WindowBase : Window {
     enum { UsesGraphics = 1, DropShadow = 0, SysCaption = 0 };
     virtual ~WindowBase() {}
 
-    // Centrado de ventana usando aritmética de Rect/Size (Sin APIs obsoletas)
-    void centerAt(const Window* at = nullptr)
-    {
-        Rect r = (!at || !at->handle) 
-            ? Rect(screenSize()) 
-            : Rect(at->position(), at->size());
-
-        Size s = this->size();
+    void centerAt(const Window* at = nullptr) {
+        Rect r = at ? Rect(at->position(), at->size()) : Rect(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+        Size s = size();
         this->position(r.x + (r.w - s.w) / 2, r.y + (r.h - s.h) / 2);
     }
     
-    // Exponer métodos de la clase base Window para evitar ocultamiento
-    Size size() const { return Window::size(); }
-    using Window::size;
-    using Window::position;
-    using Window::text;
-
-    static Size screenSize() {
-        return Size(::GetSystemMetrics(SM_CXSCREEN), ::GetSystemMetrics(SM_CYSCREEN));
-    }
+    // Firma virtual requerida para el dispatcher
+    virtual void draw(graphics::BufferedContext&) {}
 };
 
-// ............................................................................
-// 3. LAYER BASE (Gestión de Ciclo de Vida y Memoria)
-// ............................................................................
-
-struct LayerBase : WindowBase, widget::Parent
-{
-    enum { isLayer = true };
-    Window* window() override { return this; }
-    
-    // [C4 FIX] Corrección de Ownership para Kali Containers 2026
-    // El método 'add' es privado en AutoReleasePool<void>.
-    // La interfaz pública correcta es el operador functor 'operator()'.
-    void attach(ReleaseAny* obj) override {
-        if (obj) app->autorelease(obj);
-    }
-
+struct LayerBase : WindowBase {
     virtual bool open() { return true; }
-    
-    // Destrucción segura usando API nativa
-    virtual void close() {
-        if (handle) {
-            ::DestroyWindow(handle);
-            handle = nullptr;
-        }
-    }
-    
-    virtual ~LayerBase() { close(); }
+    virtual void close() { Window::handle = nullptr; }
 };
 
-// ............................................................................
-// 4. LAYER TABS (Control de Pestañas Nativo)
-// ............................................................................
+} // namespace native
+} // namespace ui
+} // namespace kali
 
-struct LayerTabs : widget::Base
-{
-    typedef LayerTabs Type;
-    static const char* class_() { return WC_TABCONTROL; }
-
-    void add(const char* name, Window* window)
-    {
-        TCITEM ti = {0};
-        ti.mask = TCIF_TEXT | TCIF_PARAM;
-        ti.pszText = const_cast<char*>(name);
-        ti.lParam = reinterpret_cast<LPARAM>(window ? window->handle : 0);
-
-        int count = (int)::SendMessage(handle, TCM_GETITEMCOUNT, 0, 0);
-        ::SendMessage(handle, TCM_INSERTITEM, count, reinterpret_cast<LPARAM>(&ti));
-
-        // Incrustar la ventana hija dentro del área cliente del Tab
-        if (window && window->handle) {
-            ::SetParent(window->handle, handle);
-            RECT r; ::GetClientRect(handle, &r);
-            ::MoveWindow(window->handle, 2, 25, r.right - 4, r.bottom - 27, TRUE);
-        }
-    }
-    
-    Size size() const {
-        RECT r; ::GetClientRect(handle, &r);
-        return Size(r.right, r.bottom);
-    }
-};
-
-typedef Ptr<LayerTabs> LayerTabsPtr;
-
-} // ~ native
-} // ~ ui
-} // ~ kali
+// Incluimos la implementación de plataforma al final para que vea los typedefs
+#include "kali/ui/native/widgets.h"
 
 #endif

@@ -12,7 +12,7 @@ namespace sa {
 using namespace kali;
 
 // ============================================================================
-// ESTRUCTURA DE DATOS DE DIBUJO
+// ESTRUCTURA DE DATOS DE RENDERIZADO
 // ============================================================================
 
 struct DrawData {
@@ -29,12 +29,12 @@ struct DrawData {
 };
 
 // ============================================================================
-// MOTOR DE VISUALIZACIÓN (OpenGL)
+// MOTOR DE VISUALIZACIÓN LOGIC PRO (OpenGL Core)
 // ============================================================================
 
 struct Display : DrawData, TrackMousePosition <ui::native::LayerBase> 
 {
-    // Dibujado de barras (Peak / Hold)
+    // Renderizado de Barras de Energía
     template <bool H, settings::Index Color, typename T>
     void drawBars(int p[][4][2], int h, const T& level) const {
         using namespace config;
@@ -49,7 +49,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         glDrawArrays(GL_QUADS, 0, n * 4);
     }
 
-    // Dibujado de curvas (Average / Smooth)
+    // Renderizado de Curvas de Promedio (Average Curve)
     template <settings::Index Color, settings::Index Width, typename T>
     void drawCurve(float p[][2], int n, const T& level, bool fill) const {
         using namespace config;
@@ -62,7 +62,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         p[n + 1][1] = (p[n - 1][1] < p[n][1]) ? p[n][1] * 2 - p[n - 1][1] : p[n][1];
 
         unsigned color = settings(Color);
-        const float (*fillRect)[2] = 0;
+        const float (*fillRect)[2] = nullptr;
         Rect r = gridRect;
         const float pp[4][2] = {
             float(r.x + r.w), float(-1 + r.h), float(r.x), float(-1 + r.h),
@@ -78,7 +78,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         gl::drawCurve_<16>(p, n + 2, fillRect, width);
     }
 
-    // [C4 FIX] Resolución de ambigüedad de max() y optimización de dibujo
+    // [C4 ARCHITECTURE FIX] drawForeground
     void drawForeground() const {
         using namespace config;
         int x = gridRect.x + barPad + 1;
@@ -96,7 +96,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         const int n = data->nBands;
         int p[MaxBands][4][2];
         
-        // Uso explícito de kali::max para evitar error de sobrecarga
+        // [C4 FIX] Explicit kali::max para evitar colisión de namespaces
         int w = kali::max(barWidth, (barWidth + barPad + 1) >> 1);
         int v = barWidth + barPad - w;
         
@@ -136,7 +136,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         glPushMatrix();
         using namespace config;
         
-        // [C4 FIX] Constructor de Rect desde Size ahora es válido vía window.h
+        // [C4 ARCHITECTURE FIX] Uso de Rect nativo de Window wrapper
         gridRect = Rect(context->size());
         Rect& r = gridRect;
 
@@ -154,7 +154,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         gl::color(settings(gridBorderColor));
         gl::drawRectFrame(Rect(0, 0, r.w, r.h));
 
-        // Líneas de frecuencia y etiquetas
+        // Grilla Logarítmica y Frecuencias
         const double fRatio1 = 1. / data->freqMin;
         const double fRatio2 = 1. / log(fRatio1 * data->freqMax);
         const int x_off = barPad + barWidth / 2;
@@ -173,10 +173,12 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         glPopMatrix();
     }
 
-    // --- LÓGICA DE ACTUALIZACIÓN LOGIC PRO ---
+    // ========================================================================
+    // CALIBRACIÓN SAGRADA: LOGIC PRO (4.5 dB/octave Tilt)
+    // ========================================================================
     void poll() {
         resizer.poll(this->handle);
-        Analyzer::Peak p; // Buffer para picos
+        Analyzer::Peak p; 
         const double scale = 1. / (double)shared.analyzer->readPeaks(p);
 
         using namespace config;
@@ -184,24 +186,24 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         const Meter::Options mo = { settings(peakDecay), settings(holdInfinite), settings(holdTime), settings(holdDecay) };
         const int avgSize = settings(avrgTime) / pollTime;
 
-        // Parámetros SAGRADOS de Logic Pro
+        // Estándares de la industria (Apple Logic Pro X)
         const double logicSlope = 4.5; 
         const double logicRef = 1000.0;
         const double fMin = shared.analyzer->freqMin;
         const double fMax = shared.analyzer->freqMax;
 
         for (int i = 0; i < nBands; i++) {
-            // 1. Cálculo de frecuencia central por banda (Interp logarítmica)
+            // Interp logarítmica para coincidir con el banco de filtros
             double freq = fMin * pow(fMax / fMin, (double)i / (nBands - 1));
             
-            // 2. Cálculo de corrección TILT (Slope 4.5dB)
+            // Cálculo del TILT Psicoacústico
             double tilt = logicSlope * (log(freq / logicRef) / log(2.0));
 
-            // 3. Procesar PEAK con Tilt
+            // Procesamiento de Peak con Inyección de Tilt
             double rawPeakDB = sp::g2dB(p.p[i] + (inf * inf));
             peak[i].tick(.5 * (rawPeakDB + tilt), mo);
 
-            // 4. Procesar AVERAGE con Tilt
+            // Procesamiento de Average con Inyección de Tilt
             double a = p.a[i] * scale;
             double aDB = sp::g2dB(avrf[i].tick(a, inf * inf, avgSize));
             avrg[i] = .5 * (aDB + tilt);
@@ -233,11 +235,14 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
         return true;
     }
 
+    // [C4 ARCHITECTURE FIX] Eliminación de destroy()
     void close() {
         context->begin();
-        delete font; delete context;
-        if (shared.editor) shared.editor->destroy();
-        shared.editor = 0; shared.display = 0;
+        delete font; 
+        delete context;
+        if (shared.editor) shared.editor->close(); // Uso de close() del Codex
+        shared.editor = nullptr; 
+        shared.display = nullptr;
     }
 
     void drawPointerInfo() const; 
@@ -255,7 +260,7 @@ struct Display : DrawData, TrackMousePosition <ui::native::LayerBase>
     ~Display() {}
     template <typename Plugin> Display(Plugin* plugin) : 
         plugin(plugin), shared(plugin->shared), settings(shared.settings), resizer(plugin),
-        context(0), font(0), barWidth(1), freeze(0) { data = this; }
+        context(nullptr), font(nullptr), barWidth(1), freeze(false) { data = this; }
 
 private:
     typedef const settings::Type Settings;

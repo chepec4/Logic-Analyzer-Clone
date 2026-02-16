@@ -1,14 +1,13 @@
-
 #ifndef KALI_UI_BASE_INCLUDED
 #define KALI_UI_BASE_INCLUDED
-
-// #include "kali/graphics.h"
 
 // ............................................................................
 
 namespace kali {
 namespace ui   {
 
+// ............................................................................
+// INTERFAZ DE CAPA (Ventana hija o popup)
 // ............................................................................
 
 struct Layer : ReleaseAny
@@ -24,6 +23,10 @@ struct Layer : ReleaseAny
     };
 };
 
+// ............................................................................
+// INTERFAZ DE WIDGETS (Controles UI)
+// ............................................................................
+
 namespace widget
 {
     struct Interface : ReleaseAny
@@ -38,10 +41,10 @@ namespace widget
 }
 
 // ............................................................................
+// INTERFAZ DE RESPUESTA A EVENTOS (Custom UI)
+// ............................................................................
 
 namespace custom {
-
-// ............................................................................
 
 struct Respondent
 {
@@ -55,7 +58,6 @@ struct Respondent
 #endif
 
 protected:
-
     virtual ~Respondent() {}
 };
 
@@ -64,12 +66,8 @@ struct Layer : ui::Layer, Respondent
     virtual Rect titlebar() const = 0;
 };
 
-// ............................................................................
-
 } // ~ namespace custom
 } // ~ namespace ui
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ KALI_UI_BASE_INCLUDED

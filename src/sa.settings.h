@@ -8,44 +8,28 @@
 #include "kali/geometry.h"
 #include "analyzer.h"
 #include "version.h"
+#include <cstring> // Requerido para std::memcpy
 
 namespace sa {
 namespace settings {
 
 // ============================================================================
-// ÍNDICE DE PARÁMETROS (C4 ARCHITECTURE)
+// ÍNDICE DE PARÁMETROS
 // ============================================================================
 
 enum Index {
     inputChannel,
-    peakEnable,
-    peakDecay,
-    avrgEnable,
-    avrgTime,
-    avrgBarType,
-    avrgBarSize,
-    holdEnable,
-    holdInfinite,
-    holdTime,
-    holdDecay,
-    holdBarType,
-    holdBarSize,
-    levelCeil,
-    levelRange,
-    levelGrid,
-    freqGridType,
-    bandsPerOctave,
-    avrgSlope,
+    peakEnable, peakDecay,
+    avrgEnable, avrgTime, avrgBarType, avrgBarSize,
+    holdEnable, holdInfinite, holdTime, holdDecay, holdBarType, holdBarSize,
+    levelCeil, levelRange, levelGrid,
+    freqGridType, bandsPerOctave,
+    avrgSlope, // [LOGIC PRO]
 
-    // Colores (Inicio de bloque persistente)
-    peakBarColor,
-    holdBarColor,
-    avrgBarColor,
-    gridBorderColor,
-    gridLineColor,
-    gridLabelColor,
-    bkgTopColor,
-    bkgBottomColor,
+    // Colores
+    peakBarColor, holdBarColor, avrgBarColor,
+    gridBorderColor, gridLineColor, gridLabelColor,
+    bkgTopColor, bkgBottomColor,
 
     Count
 };
@@ -56,17 +40,12 @@ enum {
 };
 
 // ============================================================================
-// DESCRIPTORES DE PARÁMETROS (Calibración Logic Pro)
+// DESCRIPTORES (Logic Pro Edition)
 // ============================================================================
 
 struct Descriptor {
-    Index       index;
-    int         min;
-    int         max;
-    int         step;
-    int         default_;
-    const char* unit;
-    const char* label;
+    Index index; int min, max, step, default_;
+    const char* unit; const char* label;
 };
 
 const Descriptor descriptor[] = {
@@ -88,8 +67,7 @@ const Descriptor descriptor[] = {
     {levelGrid,      2, 12, 1,  6, "dB", "Grid"},
     {freqGridType,   0,  1, 1,  0, "Decade, Octave", "Freq. Grid"},
     {bandsPerOctave, 0,  2, 1,  2, "3, 4, 6", "Bands/Octave"},
-
-    // [LOGIC PRO EDICIÓN] Slope de 4.5 dB/octava por defecto (Valor 9 en escala 0.5)
+    // [LOGIC PRO] Default 9 = 4.5 dB/oct
     {avrgSlope,     -6, 12, 1,  9, "dB/oct", "Slope"},
 
     #define _COL 0x80000000, 0x7FFFFFFF, 1,
@@ -105,13 +83,11 @@ const Descriptor descriptor[] = {
 };
 
 // ============================================================================
-// LÓGICA DE DEPENDENCIAS UI
+// DEPENDENCIAS Y ADAPTADORES
 // ============================================================================
 
 struct Depended {
-    bool use;
-    int  mask;
-    int  value;
+    bool use; int mask; int value;
     static Depended make(bool uu, bool ac=1, int ai=-1, bool bc=1, int bi=-1, bool cc=1, int ci=-1) {
         Depended r = { uu, ((ai>=0)<<ai) + ((bi>=0)<<bi) + ((ci>=0)<<ci),
                            ((ai>=0)*ac<<ai) + ((bi>=0)*bc<<bi) + ((ci>=0)*cc<<ci) };
@@ -129,82 +105,55 @@ const Depended depended[] = {
     #undef _
 };
 
-// ============================================================================
-// TYPE MANAGER (Value storage)
-// ============================================================================
-
 struct Type : kali::UsesCallback {
     Type(int* valueArray) : internalData(valueArray) {}
-
-    void defaults() {
-        for (int i = 0; i < Count; i++) internalData[i] = descriptor[i].default_;
-    }
-
+    void defaults() { for (int i = 0; i < Count; i++) internalData[i] = descriptor[i].default_; }
     void operator () (int i, int v, bool notify = true) {
         v = kali::min(descriptor[i].max, kali::max(descriptor[i].min, v));
-        if (internalData[i] != v) {
-            internalData[i] = v;
-            if (notify) callback(i);
-        }
+        if (internalData[i] != v) { internalData[i] = v; if (notify) callback(i); }
     }
-
     int operator () (int i) const { return internalData[i]; }
     const char* name(int i) const { return name_[i]; }
     void notify() const { callback(-1); }
-
 private:
     int* internalData;
     kali::EnumNames <Index, Count> name_;
 };
 
-// ============================================================================
-// WIDGET ADAPTER (UI Translation)
-// ============================================================================
-
 struct WidgetAdapter {
     typedef const Descriptor& Desc;
-
     int range(int i) const { Desc d = descriptor[i]; return (d.max - d.min) / d.step; }
     int value(int i) const { Desc d = descriptor[i]; return (settingsStore(i) - d.min) / d.step; }
     void value(int i, int v) { Desc d = descriptor[i]; settingsStore(i, v * d.step + d.min); }
-
     void value(int i, const char* v_) {
         char* end; int v;
         if (i == avrgSlope) v = (int)(strtod(v_, &end) * 2.0);
         else v = (!strcmp(descriptor[i].unit, "s")) ? (int)(strtod(v_, &end) * 1000.0 + 0.5) : (int)strtol(v_, &end, 10);
         if (end != v_) settingsStore(i, v);
     }
-
     kali::string text(int i, int v) const { Desc d = descriptor[i]; return text_(i, v * d.step + d.min); }
     kali::string text(int i) const { return text_(i, settingsStore(i)); }
-    
     kali::string label(int i) const {
         Desc d = descriptor[i];
         if (!strcmp(d.unit, "bool") || !strcmp(d.unit, "argb") || !strcmp(d.unit, "rgb")) return d.label;
         if (strstr(d.unit, ", ")) return kali::string("%s:", d.label);
         return kali::string("%s (%s):", d.label, d.unit);
     }
-
     const char* unit(int i) const { return descriptor[i].unit; }
-
 private:
     kali::string text_(int i, int v) const {
         Desc d = descriptor[i];
         if (i == avrgSlope) return kali::string("%0.1f", 0.5 * (double)v);
         if (!strcmp(d.unit, "s")) return kali::string("%0.1f", 0.001 * (double)v);
         if (!strstr(d.unit, ", ")) return kali::string("%i", v);
-
-        const char* u = d.unit;
-        int count = v;
+        const char* u = d.unit; int count = v;
         while (count-- > 0 && strstr(u, ", ")) u = strstr(u, ", ") + 2;
         const char* end = strstr(u, ", ");
         if (end) return kali::string("%.*s", (int)(end - u), u);
         return kali::string("%s", u);
     }
-
 public:
     WidgetAdapter(Type& s) : settingsStore(s) {}
-
 private:
     Type& settingsStore;
 };
@@ -212,7 +161,7 @@ private:
 } // namespace settings
 
 // ============================================================================
-// GLOBAL CONFIGURATION
+// CONFIGURACIÓN GLOBAL (Scope Fix)
 // ============================================================================
 
 namespace config {
@@ -223,28 +172,19 @@ namespace config {
     #undef KEY_PATH
 
     const int presetVersion = 2;
-    const int pollTime = 48;    // ms
-    const int infEdge  = -200;  // dB
+    const int pollTime = 48;
+    const int infEdge  = -200;
     const int barPad   = 2;
     const kali::Rect gridPad(24, 16, 24, 16);
     const kali::Size displaySize(653, 261);
 
     enum BarType { Bar, Curve, CurveFill };
 
-    namespace parameters {
-        enum Parameters { version, w, h, unused1, unused2, Count };
-    }
+    namespace parameters { enum Parameters { version, w, h, unused1, unused2, Count }; }
+    enum { SettingsIndex = parameters::Count, ParameterCount = parameters::Count + settings::Count };
 
-    enum {
-        SettingsIndex  = parameters::Count,
-        ParameterCount = parameters::Count + settings::Count
-    };
-
-    struct Preset {
-        char name[28];
-        int value[settings::Count - settings::ColorsCount];
-    };
-
+    struct Preset { char name[28]; int value[settings::Count - settings::ColorsCount]; };
+    
     const Preset preset[] = {
         { "Logic Pro Standard", 2, 1, 15, 1, 3000, 1, 3, 1, 0, 2000, 3, 1, 2, 0, 60, 6, 0, 2, 9 },
         { "Modern Fast",        2, 1, 20, 1,  500, 1, 3, 1, 0,    0, 2, 1, 2, 3, 52, 5, 0, 2, 6 },
@@ -262,6 +202,9 @@ namespace config {
             return index ? ". . ." : "Default";
         }
 
+        // [C4 FIX] Agregado método data() para sa.legacy.h
+        const int* data() const { return baseValues; }
+
         Defaults() {
             std::memset(baseValues, 0, sizeof(baseValues));
             baseValues[parameters::version] = presetVersion;
@@ -273,11 +216,24 @@ namespace config {
     private:
         int baseValues[ParameterCount];
     };
-} // namespace config
 
-// ============================================================================
-// SHARED STATE
-// ============================================================================
+    // [C4 FIX] Definición de FreqGrid para sa.display.h
+    struct FreqGrid { int count; const double (*freq)[2]; };
+    
+    const double freqGridDec[][2] = { {25, 1}, {40, 0}, {50, 1}, {100, 1}, {1000, 1}, {10000, 1}, {20000, 1} };
+    const double freqGridLin[][2] = { {31.25, 1}, {62.5, 1}, {125, 1}, {1000, 1}, {16000, 1} };
+    
+    const FreqGrid freqGrid[] = {
+        { sizeof(freqGridDec)/sizeof(*freqGridDec), freqGridDec },
+        { sizeof(freqGridLin)/sizeof(*freqGridLin), freqGridLin }
+    };
+
+    enum PrefIndex { keepColors, smartDisplay, PrefCount };
+    typedef kali::EnumNames <PrefIndex, PrefCount> PrefName;
+    struct Pref { PrefIndex index; int default_; const char* label; };
+    const Pref prefs[PrefCount] = { { keepColors, 1, "Keep colors" }, { smartDisplay, 0, "Smart size" } };
+
+} // namespace config
 
 struct Editor;
 struct Display;
@@ -287,7 +243,7 @@ struct Shared {
     Display* display;
     Analyzer* analyzer;
     settings::Type settings;
-    int       parameter[config::ParameterCount];
+    int parameter[config::ParameterCount];
 
     Shared() : editor(nullptr), display(nullptr), analyzer(nullptr),
                settings(parameter + config::SettingsIndex) {

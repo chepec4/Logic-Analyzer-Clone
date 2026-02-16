@@ -8,15 +8,12 @@
 #include "kali/geometry.h"
 #include "analyzer.h"
 #include "version.h"
-#include <cstring> // Requerido para std::memcpy
+#include <cstring> // Para memcpy
 
 namespace sa {
 namespace settings {
 
-// ============================================================================
-// ÍNDICE DE PARÁMETROS
-// ============================================================================
-
+// Índices de Parámetros
 enum Index {
     inputChannel,
     peakEnable, peakDecay,
@@ -24,7 +21,7 @@ enum Index {
     holdEnable, holdInfinite, holdTime, holdDecay, holdBarType, holdBarSize,
     levelCeil, levelRange, levelGrid,
     freqGridType, bandsPerOctave,
-    avrgSlope, // [LOGIC PRO]
+    avrgSlope, // [LOGIC PRO] 4.5dB Tilt
 
     // Colores
     peakBarColor, holdBarColor, avrgBarColor,
@@ -34,15 +31,9 @@ enum Index {
     Count
 };
 
-enum {
-    ColorsIndex = peakBarColor,
-    ColorsCount = Count - ColorsIndex
-};
+enum { ColorsIndex = peakBarColor, ColorsCount = Count - ColorsIndex };
 
-// ============================================================================
-// DESCRIPTORES (Logic Pro Edition)
-// ============================================================================
-
+// Descriptores
 struct Descriptor {
     Index index; int min, max, step, default_;
     const char* unit; const char* label;
@@ -82,10 +73,7 @@ const Descriptor descriptor[] = {
     #undef _COL
 };
 
-// ============================================================================
-// DEPENDENCIAS Y ADAPTADORES
-// ============================================================================
-
+// ... (Dependencias y Type se mantienen igual para brevedad, son correctos en tu archivo) ...
 struct Depended {
     bool use; int mask; int value;
     static Depended make(bool uu, bool ac=1, int ai=-1, bool bc=1, int bi=-1, bool cc=1, int ci=-1) {
@@ -94,7 +82,6 @@ struct Depended {
         return r;
     }
 };
-
 const Depended depended[] = {
     #define _ Depended::make
     _ (0), _ (1), _ (0, 1, peakEnable), _ (1), _ (0, 1, avrgEnable),
@@ -161,7 +148,7 @@ private:
 } // namespace settings
 
 // ============================================================================
-// CONFIGURACIÓN GLOBAL (Scope Fix)
+// CONFIGURACIÓN GLOBAL
 // ============================================================================
 
 namespace config {
@@ -202,7 +189,7 @@ namespace config {
             return index ? ". . ." : "Default";
         }
 
-        // [C4 FIX] Agregado método data() para sa.legacy.h
+        // [C4 FIX] Método data() REQUERIDO por sa.legacy.h
         const int* data() const { return baseValues; }
 
         Defaults() {
@@ -217,12 +204,10 @@ namespace config {
         int baseValues[ParameterCount];
     };
 
-    // [C4 FIX] Definición de FreqGrid para sa.display.h
+    // [C4 FIX] Definiciones de Grilla para sa.display.h
     struct FreqGrid { int count; const double (*freq)[2]; };
-    
     const double freqGridDec[][2] = { {25, 1}, {40, 0}, {50, 1}, {100, 1}, {1000, 1}, {10000, 1}, {20000, 1} };
     const double freqGridLin[][2] = { {31.25, 1}, {62.5, 1}, {125, 1}, {1000, 1}, {16000, 1} };
-    
     const FreqGrid freqGrid[] = {
         { sizeof(freqGridDec)/sizeof(*freqGridDec), freqGridDec },
         { sizeof(freqGridLin)/sizeof(*freqGridLin), freqGridLin }

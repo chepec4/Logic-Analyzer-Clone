@@ -1,38 +1,39 @@
 // ============================================================================
-// C4 ANALYZER - RESOURCE SCRIPT (Logic Pro x64 Edition)
-// Optimizado para MinGW GCC 12.2 / Windows Server 2025
+// C4 ANALYZER - RESOURCE SCRIPT
 // ============================================================================
 
 #include <windows.h>
-#include <commctrl.h>
 
-// Definiciones manuales para evitar dependencias de headers volátiles
-#define VOS_NT_WINDOWS32    0x00040004L
-#define VFT_DLL             0x00000002L
-#define VERSION_STR         "1.1.0"
-#define VERSION_NUM         1,1,0,0
+// Definiciones de respaldo por si faltan en el entorno MinGW
+#ifndef VOS_NT_WINDOWS32
+#define VOS_NT_WINDOWS32 0x00040004L
+#endif
+#ifndef VFT_DLL
+#define VFT_DLL 0x00000002L
+#endif
+
+// Versión Hardcoded (Debe coincidir con version.h)
+#define VERSION_STR "1.1.0"
+#define VERSION_NUM 1,1,0,0
 
 // ----------------------------------------------------------------------------
-// 1. ÍCONO DEL PLUGIN (Logic Pro Styled)
+// 1. Recursos Gráficos y Visuales
 // ----------------------------------------------------------------------------
-// El ID 101 es el estándar para que el DAW cargue el ícono en el navegador.
+// Icono principal del Plugin (visible en el explorador del DAW)
 101 ICON "logic_icon.ico"
 
-// ----------------------------------------------------------------------------
-// 2. MANIFIESTO DE ESTILOS VISUALES (Common Controls 6.0)
-// ----------------------------------------------------------------------------
-// Esto habilita el renderizado moderno de botones y pestañas.
+// Manifiesto para controles comunes (Botones modernos, ComboBoxes, etc.)
 1 RT_MANIFEST "main.manifest"
 
 // ----------------------------------------------------------------------------
-// 3. INFORMACIÓN DE VERSIÓN (Sincronizada con el DAW)
+// 2. Información de Versión del DLL
 // ----------------------------------------------------------------------------
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION    VERSION_NUM
  PRODUCTVERSION VERSION_NUM
- FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGSMASK  0x3fL
 #ifdef _DEBUG
- FILEFLAGS      VS_FF_DEBUG
+ FILEFLAGS      0x1L // VS_FF_DEBUG
 #else
  FILEFLAGS      0x0L
 #endif
@@ -42,17 +43,16 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904E4" // Inglés (EE.UU.) - Codificación Multilingüe
+        BLOCK "040904E4" // Lang: English (US), Charset: Windows Multilingual
         BEGIN
-            VALUE "CompanyName",      "Seven Phases & C4 optimized"
-            VALUE "FileDescription",  "C4 Analyzer - Logic Pro Edition"
+            VALUE "CompanyName",      "Seven Phases & C4 Optimized"
+            VALUE "FileDescription",  "C4 Analyzer (Logic Pro Edition)"
             VALUE "FileVersion",      VERSION_STR
             VALUE "InternalName",     "C4Analyzer"
-            VALUE "LegalCopyright",   "Copyright (C) 2008-2026 Seven Phases"
+            VALUE "LegalCopyright",   "Copyright (C) 2008-2026"
             VALUE "OriginalFilename", "C4Analyzer.dll"
-            VALUE "ProductName",      "C4 Analyzer VST"
+            VALUE "ProductName",      "C4 Analyzer"
             VALUE "ProductVersion",   VERSION_STR
-            VALUE "Comments",         "Optimized for modern x64 DAWs and Logic Pro Slope"
         END
     END
     BLOCK "VarFileInfo"

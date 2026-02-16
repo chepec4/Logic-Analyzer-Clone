@@ -12,25 +12,22 @@
 // -----------------------------------------------------------------------------
 // 2. VERSIÓN DEL SOFTWARE
 // -----------------------------------------------------------------------------
-// Definimos los números directamente para evitar errores de preprocesador en GCC
+// Definimos los números directamente para evitar errores de "token pasting"
 #define VER_MAJOR 1
-#define VER_MINOR 0
+#define VER_MINOR 1
 #define VER_PATCH 0
 
-// Versión numérica para cálculos internos del plugin
-#define VERSION     1.00
+// Versión numérica (float) para cálculos internos del plugin
+#define VERSION     1.10
 
 // Versión en texto para mostrar en la interfaz (Acerca de...)
-#define VERSION_STR "1.0.0"
-
-// Versión formateada para los Recursos de Windows (.rc)
-// Esto soluciona el error de "pasting" al compilar main.res
-#define VERSION_RC  1,0,0,0
+#define VERSION_STR "1.1.0"
 
 // -----------------------------------------------------------------------------
 // NOTA TÉCNICA:
-// Se han eliminado las macros recursivas (PP_CAT, PP_STR) que causaban
-// el error "pasting tokens" en MinGW/GCC 12.
+// El archivo main.rc tiene sus propias definiciones para evitar conflictos
+// de inclusión con el compilador de recursos (windres).
+// Mantener ambos archivos sincronizados manualmente si se cambia la versión.
 // -----------------------------------------------------------------------------
 
 #endif // VERSION_INCLUDED

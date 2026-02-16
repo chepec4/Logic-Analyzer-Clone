@@ -1,4 +1,3 @@
-
 #ifndef SA_LEGACY_INCLUDED
 #define SA_LEGACY_INCLUDED
 
@@ -6,13 +5,14 @@
 
 // ............................................................................
 
-namespace kali   {
+namespace sa {
 namespace legacy {
 
-using namespace sa::config;
+using namespace sa::config; // Acceso a Defaults, ParameterCount, etc.
 
 typedef int Preset[ParameterCount];
 
+// Conversor de presets antiguos (v1 -> v2)
 bool convertPreset(Preset& value)
 {
     using namespace parameters;
@@ -20,74 +20,60 @@ bool convertPreset(Preset& value)
 
     #define _ ~0
     #define i SettingsIndex +
+    
+    // Mapa de migración de parámetros
     const Preset maps[] = 
     {
-        {   // v1
-            _,
-            _, 
-            _, 
-            _,
-            w, 
-            h,
-            i inputChannel,
-            i peakEnable,
-            i peakDecay,
-            i avrgEnable,
-            i avrgTime,
-            i avrgBarType,
-            i avrgBarSize,
-            i holdEnable,
-            i holdInfinite,
-            i holdTime,
-            i holdDecay,
-            i holdBarType,
-            i holdBarSize,
-            i levelCeil,
-            i levelRange,
-            i levelGrid,
-            i freqGridType,
-            i bandsPerOctave,
-            i peakBarColor,
-            i holdBarColor,
-            i avrgBarColor,
-            i gridBorderColor,
-            i gridLineColor,
-            i gridLabelColor,
-            i bkgTopColor,
-            i bkgBottomColor
+        {   // v1 Mapping
+            _, _, _, _, w, h,
+            i inputChannel, i peakEnable, i peakDecay,
+            i avrgEnable, i avrgTime, i avrgBarType, i avrgBarSize,
+            i holdEnable, i holdInfinite, i holdTime, i holdDecay, i holdBarType, i holdBarSize,
+            i levelCeil, i levelRange, i levelGrid,
+            i freqGridType, i bandsPerOctave,
+            i peakBarColor, i holdBarColor, i avrgBarColor,
+            i gridBorderColor, i gridLineColor, i gridLabelColor,
+            i bkgTopColor, i bkgBottomColor,
+            // Nuevos parámetros v2 inicializados a default
+            _, // avrgSlope
         }
     };
     #undef i
     #undef _
 
     int ver = value[version];
-    if (ver == presetVersion)
-        return true;
+    
+    // Si ya es la versión actual, no hacer nada
+    if (ver == presetVersion) return true;
 
-    if (ver < 1 || ver > sizeof(maps)/sizeof(*maps))
+    // Validación de rango de versión
+    if (ver < 1 || ver > (int)(sizeof(maps)/sizeof(*maps)))
         return false;
 
     const Preset& map = maps[ver - 1];
     Preset src;
-    copy(src, value, n);
-    copy(value, Defaults().data(), n);
-    for (int i = 0; i < n; i++)
-        if (map[i] > 0)
-            value[map[i]] = src[i];
+    
+    // Backup de valores originales
+    kali::copy(src, value, n);
+    
+    // Resetear a defaults modernos
+    // [C4 FIX] 'data()' existe gracias a la actualización en sa.settings.h
+    kali::copy(value, Defaults().data(), n);
+    
+    // Migrar valores mapeados
+    for (int k = 0; k < n; k++) {
+        if (map[k] >= 0) // Si tiene mapeo válido
+            value[map[k]] = src[k];
+    }
 
     #if DBG
-        trace.warn("%s: version %i\n", FUNCTION_, src[version]);
-        EnumNames <Index, sa::settings::Count> name;
-        for (int i = SettingsIndex; i < n; i++)
-            trace.warn("%20s: %4i\n", 
-                name[i - SettingsIndex], value[i]);
+        trace.warn("%s: Migrated version %i to %i\n", FUNCTION_, ver, presetVersion);
     #endif
-    return true;    
+
+    return true;
 }
 
 } // ~ namespace legacy
-} // ~ namespace kali
-
-// ............................................................................
+} // ~ namespace sa
 
 #endif // ~ SA_LEGACY_INCLUDED

@@ -1,73 +1,42 @@
-
-#ifndef VST_INCLUDED
-#define VST_INCLUDED
-
-#pragma warning(push, 3)
-
-#include "audioeffectx.h"
-#include "aeffeditor.h"
-
-#pragma warning(pop)
+#ifndef KALI_VST_INCLUDED
+#define KALI_VST_INCLUDED
 
 #include "kali/app.h"
-
-#if DBG
-    #define tf trace.full("%s(%08x)\n", FUNCTION_, ::GetCurrentThreadId());
-#else
-    #define tf
-#endif
-
-// ............................................................................
+#include "vst/pluginterfaces/vst2.x/aeffeditor.h"
+#include "vst/pluginterfaces/vst2.x/audioeffectx.h"
 
 namespace vst {
 
 // ............................................................................
 
-#define strcpy  dont_use_strcpy_with_vst
-#define strncpy dont_use_strncpy_with_vst
-// use PluginBase::copy instead
-
-//.............................................................................
-
 template <typename Plugin>
 struct PluginBase : AudioEffectX
 {
-    enum
+    PluginBase(audioMasterCallback master) : AudioEffectX(master, Plugin::ProgramCount, Plugin::ParameterCount)
     {
-        Category       = kPlugCategEffect,
-        Version        = 1000,
-        UniqueID       = 0,
-        PresetCount    = 0,
-        ParameterCount = 0
-    };
-
-    noalias_ static char* copy(char* dst, const char* src, int n)
-    {
-        char* p = dst;
-        while ((--n > 0) && *src)
-            *p++ = *src++;
-        *p = 0;
-        return dst;
+        setNumInputs(2);
+        setNumOutputs(2);
+        setUniqueID(Plugin::ID);
+        canProcessReplacing();
+        programsAreChunks(true);
     }
 
-private:
+    virtual ~PluginBase() {}
 
-    bool getEffectName(char* text)    {return !!copy(text, Plugin::name(), kVstMaxEffectNameLen);}
-    bool getVendorString(char* text)  {return !!copy(text, Plugin::vendor(), kVstMaxVendorStrLen);}
-    bool getProductString(char* text) {return !!copy(text, Plugin::name(), kVstMaxProductStrLen);}
-
-    VstInt32 getVendorVersion()       {return Plugin::Version;}
-    VstPlugCategory getPlugCategory() {return VstPlugCategory(Plugin::Category);}
-
-public:
-
-    PluginBase(audioMasterCallback master) : AudioEffectX
-        (master, Plugin::PresetCount, Plugin::ParameterCount)
-            {setUniqueID(Plugin::UniqueID);}
-
-private:
-    PluginBase(const PluginBase&);
-    PluginBase& operator = (const PluginBase&);
+    // Helpers de seguridad VST
+    void programsAreChunks(bool v = true) { AudioEffectX::programsAreChunks(v); }
+    
+    // Copia segura de strings
+    static char* copy(char* dst, const char* src, int maxLen)
+    {
+        int i = 0;
+        while ((i < maxLen - 1) && src[i]) {
+            dst[i] = src[i];
+            i++;
+        }
+        dst[i] = 0;
+        return dst;
+    }
 };
 
 // ............................................................................
@@ -75,99 +44,73 @@ private:
 template <typename Plugin, typename Window>
 struct Editor : AEffEditor
 {
-    bool open(void* ref)
-    {
-        tf
-        AEffEditor::open(ref);
-
-        if (window)
-        {
-            trace("%s: window already open\n", FUNCTION_);
-            return true;
-        }
-
-        kali::Window parent((kali::Window::Handle) ref);
-        window = new Window(plugin);
-        kali::app->createLayer(&parent, window);
-        updateRect();
-
-        return !!window->handle;
+    Editor(Plugin* plugin) : plugin(plugin), window(0) {}
+    
+    virtual ~Editor() 
+    { 
+        close(); 
     }
 
-    void close()
+    bool getRect(ERect** rect) override
     {
-        if (window)
-        {
-            AEffEditor::close();
-            window->destroy();
-            delete window;
-            window = 0;
-            tf
-        }
-    }
-
-    bool onKeyDown(VstKeyCode& key)
-    {
-        /* trace.full("%s: %c, %i, %i\n", FUNCTION_,
-            key.character, key.virt, key.modifier); */
-        int code = (key.character & 0xff - 0x20)
-                 + (key.modifier << 8);
-        return window->vstKeyDown(code);
-    }
-
-    bool getRect(ERect** r)
-    {
-        tf
-        updateRect();
-        *r = &rect;
+        *rect = &rect_;
         return true;
     }
 
-    void updateRect()
+    bool open(void* ptr) override
+    {
+        close(); // Seguridad: cerrar anterior si existe
+        
+        // [C4 ARCHITECTURE FIX] Uso del sistema de ventanas Kali moderno
+        if (!kali::app::createLayer(reinterpret_cast<const kali::Window*>(ptr), &window))
+            return false;
+
+        // Inyección de dependencia del plugin
+        new (window) Window(plugin);
+
+        if (!window->open())
+        {
+            // [C4 FIX] close() en lugar de destroy()
+            window->close(); 
+            return false;
+        }
+
+        updateRect();
+        return true;
+    }
+
+    void close() override
     {
         if (window)
         {
-            kali::Size s = window->size();
-            rect.left    = 0;
-            rect.top     = 0;
-            rect.right   = VstInt16(s.w);
-            rect.bottom  = VstInt16(s.h);
+            // [C4 ARCHITECTURE FIX] Alineación con LayerBase::close()
+            window->close();
+            // Kali gestiona la memoria, pero limpiamos el puntero
+            window = 0; 
         }
     }
 
-    ~Editor() {close(); tf}
-
-    Editor(Plugin* plugin) :
-        AEffEditor(plugin),
-        plugin(plugin),
-        window(0)
-    {tf}
+    void idle() override 
+    {
+        // Hook para tareas en segundo plano si fuera necesario
+    }
 
 private:
+    void updateRect()
+    {
+        // [C4 FIX] Uso de geometría moderna
+        kali::Rect r(window->position(), window->size());
+        rect_.left   = (short)r.x;
+        rect_.top    = (short)r.y;
+        rect_.right  = (short)(r.x + r.w);
+        rect_.bottom = (short)(r.y + r.h);
+    }
+
     Plugin* plugin;
     Window* window;
-    ERect   rect;
-
-    Editor(const Editor&);
-    Editor& operator = (const Editor&);
+    ERect   rect_;
 };
 
-// ............................................................................
+} // namespace vst
 
-enum KeyModifier
-{
-    #define _(M) MODIFIER_##M << 8
-    Alt   = _(ALTERNATE),
-    Cmd   = _(COMMAND),
-    Ctrl  = _(CONTROL),
-    Shift = _(SHIFT),
-    #undef  _
-};
-
-// ............................................................................
-
-} // ~ namespace vst
-
-// ............................................................................
-
-#endif // ~ VST_INCLUDED
+#endif

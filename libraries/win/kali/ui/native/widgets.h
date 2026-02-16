@@ -8,7 +8,6 @@
 
 namespace kali {
 
-// Temporizador nativo para el bombeo de la UI de sa::Display
 struct Timer : UsesCallback {
     Window* w;
     Timer() : w(nullptr) {}
@@ -25,28 +24,8 @@ struct Timer : UsesCallback {
 
 namespace ui { namespace native {
 
-struct Font : ReleaseAny {
-    struct Scale {
-        int x_, y_;
-        Scale(int x, int y) : x_(x), y_(y) {}
-        int x(int v) { return (v * x_ + 3) / 6; }
-        int y(int v) { return (v * y_) / 13; }
-    };
-    static const Font& main() {
-        static Font* aux = nullptr;
-        if (!aux) aux = app->autorelease(new Font);
-        return *aux;
-    }
-    HFONT handle;
-    operator HFONT() const { return handle; }
-    Scale scale() const { return Scale(8, 16); }
-    Font() {
-        NONCLIENTMETRICS ncm = { sizeof(ncm) };
-        ::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-        handle = ::CreateFontIndirect(&ncm.lfMessageFont);
-    }
-    ~Font() { ::DeleteObject(handle); }
-};
+// AnyWidget es un alias para el puntero inteligente a la interfaz del widget
+using AnyWidget = Ptr<widget::Interface>;
 
 namespace widget {
 
@@ -74,75 +53,34 @@ struct Base : Interface {
     void ctor(const Window* p, HWND h) { 
         handle = h; 
         Window(h).object(this); 
-        ::SendMessage(handle, WM_SETFONT, (WPARAM)(HFONT)Font::main(), 0);
     }
     
     static const char* class_() { return "Button"; }
 };
 
-// --- IMPLEMENTACIONES ---
-struct Text    : Base { typedef Text Type;    static const char* class_() { return "Static"; } };
-struct Edit    : Base { typedef Edit Type;    static const char* class_() { return "Edit"; } };
-struct Button  : Base { typedef Button Type;  static const char* class_() { return "Button"; } };
-struct Toggle  : Button {
-    int  value() const override { return (int)::SendMessage(handle, BM_GETCHECK, 0, 0); }
-    void value(int v) override { ::SendMessage(handle, BM_SETCHECK, v ? BST_CHECKED : BST_UNCHECKED, 0); }
-};
-struct Combo   : Base {
-    typedef Combo Type;
-    static const char* class_() { return "ComboBox"; }
-    int  value() const override { return (int)::SendMessage(handle, CB_GETCURSEL, 0, 0); }
-    void value(int v) override { ::SendMessage(handle, CB_SETCURSEL, v, 0); }
-    void add(const char* s) { ::SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)s); }
-};
-
-// [C4 MASTER FIX] Stubs de tipos requeridos por sa.display.h
-struct Toolbar   : Base { typedef Toolbar Type; };
-struct ColorWell : Base { typedef ColorWell Type; };
-struct Stepper   : Base { typedef Stepper Type; };
-struct Fader     : Base { typedef Fader Type; };
-
-// --- FACTORÍAS ---
 struct ResourceCtor {
     const Window* p;
     ResourceCtor(const Window* p) : p(p) {}
     struct Aux {
         HWND h; const Window* p;
         Aux(const Window* p, int id) : p(p) { h = ::GetDlgItem(p->handle, id); }
-        
         template <typename T> operator Ptr<T>() const {
             if (!h) return nullptr;
             T* w = new T(); w->ctor(p, h);
             return w;
         }
-        
-        /**
-         * [C4 MASTER FIX] Cast explícito para resolver el tipo AnyWidget (Ptr<Interface>)
-         */
-        operator kali::ui::native::AnyWidget() const {
+        // Soluciona: error: expected type-specifier before AnyWidget
+        operator AnyWidget() const {
             if (!h) return nullptr;
             Base* w = new Base(); w->ctor(p, h);
-            return kali::ui::native::AnyWidget(w);
+            return AnyWidget(w);
         }
     };
     Aux operator()(int id) const { return Aux(p, id); }
 };
 
-template <typename T> 
-inline typename T::Type* Ctor(const Window* parent, const Rect& r, const char* text = nullptr) 
-{
-    typedef typename T::Type W; 
-    HWND h = ::CreateWindowExA(0, W::class_(), text ? text : "", WS_CHILD | WS_VISIBLE,
-        r.x, r.y, r.w, r.h, (HWND)parent->handle, nullptr, GetModuleHandle(nullptr), nullptr);
-    if (h) {
-        W* w = new W(); w->ctor(parent, h);
-        return w;
-    }
-    return nullptr;
-}
+} // ~ widget
+}} // ~ native / ui
+} // ~ kali
 
-} // ~ namespace widget
-}} // ~ namespace native / ui
-} // ~ namespace kali
-
-#endif // ~ KALI_UI_NATIVE_WIDGETS_INCLUDED
+#endif

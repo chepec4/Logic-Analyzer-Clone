@@ -3,20 +3,34 @@
 
 #include <windows.h>
 #include <commctrl.h>
-#include <stdio.h>
 #include "kali/window.h"
 #include "kali/ui/native/widgets.base.h"
 
 namespace kali {
+
+// Temporizador nativo para el bombeo de la UI de sa::Display
+struct Timer : UsesCallback {
+    Window* w;
+    Timer() : w(nullptr) {}
+    void start(Window* win, unsigned ms) {
+        stop(); w = win;
+        if (w) ::SetTimer(w->handle, (UINT_PTR)this, ms, thunk);
+    }
+    void stop() { if (w) ::KillTimer(w->handle, (UINT_PTR)this); w = nullptr; }
+    static VOID CALLBACK thunk(HWND, UINT, UINT_PTR p, DWORD) {
+        Timer* t = reinterpret_cast<Timer*>(p);
+        if (t) t->callback(0);
+    }
+};
+
 namespace ui { namespace native {
 
 struct Font : ReleaseAny {
     struct Scale {
-        enum { refx = 6, refy = 13 };
         int x_, y_;
         Scale(int x, int y) : x_(x), y_(y) {}
-        int x(int v) { return (v * x_ + refx / 2) / refx; }
-        int y(int v) { return (v * y_) / refy; }
+        int x(int v) { return (v * x_ + 3) / 6; }
+        int y(int v) { return (v * y_) / 13; }
     };
     static const Font& main() {
         static Font* aux = nullptr;
@@ -25,13 +39,7 @@ struct Font : ReleaseAny {
     }
     HFONT handle;
     operator HFONT() const { return handle; }
-    Scale scale() const {
-        HDC dc = ::CreateCompatibleDC(nullptr);
-        HGDIOBJ f = ::SelectObject(dc, handle);
-        TEXTMETRIC tm; ::GetTextMetrics(dc, &tm);
-        ::SelectObject(dc, f); ::DeleteDC(dc);
-        return Scale(tm.tmAveCharWidth, tm.tmHeight);
-    }
+    Scale scale() const { return Scale(8, 16); }
     Font() {
         NONCLIENTMETRICS ncm = { sizeof(ncm) };
         ::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
@@ -47,22 +55,21 @@ struct Base : Interface {
     HWND handle;
     Base() : handle(nullptr) {}
 
-    virtual bool enable() const override { return handle && ::IsWindowEnabled(handle); }
-    virtual void enable(bool e) override { if(handle) ::EnableWindow(handle, e); }
-    virtual bool visible() const override { return handle && ::IsWindowVisible(handle); }
-    virtual void visible(bool v) override { if(handle) ::ShowWindow(handle, v ? SW_SHOW : SW_HIDE); }
-    virtual int  value() const override { return 0; }
-    virtual void value(int) override {}
-    virtual int  range() const override { return 100; }
-    virtual void range(int) override {}
-    virtual void text(const char* s) override { if(handle) ::SetWindowTextA(handle, s ? s : ""); }
-    virtual string text() const override {
-        if (!handle) return string();
-        char buf[512]; ::GetWindowTextA(handle, buf, 512);
+    bool enable() const override { return handle && ::IsWindowEnabled(handle); }
+    void enable(bool e) override { if(handle) ::EnableWindow(handle, e ? TRUE : FALSE); }
+    bool visible() const override { return handle && ::IsWindowVisible(handle); }
+    void visible(bool v) override { if(handle) ::ShowWindow(handle, v ? SW_SHOW : SW_HIDE); }
+    int  value() const override { return 0; }
+    void value(int) override {}
+    int  range() const override { return 100; }
+    void range(int) override {}
+    void text(const char* s) override { if(handle) ::SetWindowTextA(handle, s ? s : ""); }
+    string text() const override {
+        char buf[512] = {0};
+        if (handle) ::GetWindowTextA(handle, buf, 511);
         return string("%s", buf);
     }
-    virtual Window::Handle expose() const override { return handle; }
-    void destroy() { if(handle) ::DestroyWindow(handle); handle = nullptr; }
+    Window::Handle expose() const override { return handle; }
 
     void ctor(const Window* p, HWND h) { 
         handle = h; 
@@ -70,30 +77,32 @@ struct Base : Interface {
         ::SendMessage(handle, WM_SETFONT, (WPARAM)(HFONT)Font::main(), 0);
     }
     
-    static void thunk_(HWND h, int msg) {
-        Base* w = Window(h).object<Base>();
-        if (w) w->callback(msg);
-    }
-    virtual void draw(DRAWITEMSTRUCT*) {}
     static const char* class_() { return "Button"; }
-    enum { style_ = 0, styleEx_ = 0 };
 };
 
-struct Text : Base { typedef Text Type; static const char* class_() { return "Static"; } };
-struct Edit : Base { typedef Edit Type; static const char* class_() { return "Edit"; } };
-struct Button : Base { typedef Button Type; static const char* class_() { return "Button"; } };
-struct Toggle : Button {
+// --- IMPLEMENTACIONES ---
+struct Text    : Base { typedef Text Type;    static const char* class_() { return "Static"; } };
+struct Edit    : Base { typedef Edit Type;    static const char* class_() { return "Edit"; } };
+struct Button  : Base { typedef Button Type;  static const char* class_() { return "Button"; } };
+struct Toggle  : Button {
     int  value() const override { return (int)::SendMessage(handle, BM_GETCHECK, 0, 0); }
-    void value(int v) override { ::SendMessage(handle, BM_SETCHECK, v, 0); }
+    void value(int v) override { ::SendMessage(handle, BM_SETCHECK, v ? BST_CHECKED : BST_UNCHECKED, 0); }
 };
-struct Combo : Base {
+struct Combo   : Base {
     typedef Combo Type;
     static const char* class_() { return "ComboBox"; }
-    void add(const char* t) { ::SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)t); }
     int  value() const override { return (int)::SendMessage(handle, CB_GETCURSEL, 0, 0); }
     void value(int v) override { ::SendMessage(handle, CB_SETCURSEL, v, 0); }
+    void add(const char* s) { ::SendMessage(handle, CB_ADDSTRING, 0, (LPARAM)s); }
 };
 
+// [C4 MASTER FIX] Stubs de tipos requeridos por sa.display.h
+struct Toolbar   : Base { typedef Toolbar Type; };
+struct ColorWell : Base { typedef ColorWell Type; };
+struct Stepper   : Base { typedef Stepper Type; };
+struct Fader     : Base { typedef Fader Type; };
+
+// --- FACTORÍAS ---
 struct ResourceCtor {
     const Window* p;
     ResourceCtor(const Window* p) : p(p) {}
@@ -107,6 +116,9 @@ struct ResourceCtor {
             return w;
         }
         
+        /**
+         * [C4 MASTER FIX] Cast explícito para resolver el tipo AnyWidget (Ptr<Interface>)
+         */
         operator kali::ui::native::AnyWidget() const {
             if (!h) return nullptr;
             Base* w = new Base(); w->ctor(p, h);
@@ -120,8 +132,7 @@ template <typename T>
 inline typename T::Type* Ctor(const Window* parent, const Rect& r, const char* text = nullptr) 
 {
     typedef typename T::Type W; 
-    const DWORD style = WS_CHILD | WS_VISIBLE | W::style_;
-    HWND h = ::CreateWindowExA(0, W::class_(), text, style,
+    HWND h = ::CreateWindowExA(0, W::class_(), text ? text : "", WS_CHILD | WS_VISIBLE,
         r.x, r.y, r.w, r.h, (HWND)parent->handle, nullptr, GetModuleHandle(nullptr), nullptr);
     if (h) {
         W* w = new W(); w->ctor(parent, h);
@@ -130,8 +141,8 @@ inline typename T::Type* Ctor(const Window* parent, const Rect& r, const char* t
     return nullptr;
 }
 
-} // ~ widget
-}} // ~ native / ui
-} // ~ kali
+} // ~ namespace widget
+}} // ~ namespace native / ui
+} // ~ namespace kali
 
-#endif // KALI_UI_NATIVE_WIDGETS_INCLUDED
+#endif // ~ KALI_UI_NATIVE_WIDGETS_INCLUDED

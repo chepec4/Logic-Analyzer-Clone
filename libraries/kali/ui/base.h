@@ -1,13 +1,17 @@
 #ifndef KALI_UI_BASE_INCLUDED
 #define KALI_UI_BASE_INCLUDED
 
+// [C4 FIX] Dependencias explícitas para garantizar autosuficiencia
+#include "kali/types.h"    // Para ReleaseAny
+#include "kali/geometry.h" // Para Rect
+
 // ............................................................................
 
 namespace kali {
 namespace ui   {
 
 // ............................................................................
-// INTERFAZ DE CAPA (Ventana hija o popup)
+// INTERFAZ DE CAPA (LAYER)
 // ............................................................................
 
 struct Layer : ReleaseAny
@@ -24,7 +28,7 @@ struct Layer : ReleaseAny
 };
 
 // ............................................................................
-// INTERFAZ DE WIDGETS (Controles UI)
+// INTERFAZ DE WIDGETS
 // ............................................................................
 
 namespace widget

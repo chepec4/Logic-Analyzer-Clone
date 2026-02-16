@@ -1,63 +1,58 @@
 #ifndef KALI_UI_NATIVE_INCLUDED
 #define KALI_UI_NATIVE_INCLUDED
 
-#include "kali/ui/base.h"
-#include "kali/ui/native/widgets.h"
+#include "kali/ui/native/widgets.base.h"
+#include "kali/ui/native/widgets.h" 
 
-namespace kali {
-namespace ui {
+namespace kali   {
+namespace ui      {
 namespace native {
 
 // ............................................................................
-// 1. TYPEDEFS DE PUNTEROS INTELIGENTES (Modelo Actual)
+// 1. TYPEDEFS PARA PUNTEROS INTELIGENTES (UI API MODERNA)
 // ............................................................................
 
-typedef Ptr<widget::Interface> AnyWidget;
-typedef Ptr<widget::Button>    Button;
-typedef Ptr<widget::Combo>     Combo;
-typedef Ptr<widget::Text>      Text;
-typedef Ptr<widget::Edit>      Edit;
-typedef Ptr<widget::Toggle>    Toggle;
-typedef Ptr<widget::Toolbar>   Toolbar;
-typedef Ptr<widget::ColorWell> ColorWell;
-typedef Ptr<widget::Stepper>   Stepper;
-typedef Ptr<widget::Fader>     Fader;
+typedef Ptr <widget::Interface> AnyWidget;
+typedef Ptr <widget::Button>    Button;
+typedef Ptr <widget::Combo>     Combo;
+typedef Ptr <widget::Text>      Text;
+typedef Ptr <widget::Text>      TextRight;
+typedef Ptr <widget::Text>      Label;
+typedef Ptr <widget::Edit>      Edit;
+typedef Ptr <widget::Toggle>    Toggle;
+typedef Ptr <widget::Toolbar>   Toolbar;
+typedef Ptr <widget::ColorWell> ColorWell;
+typedef Ptr <widget::Stepper>   Stepper;
+typedef Ptr <widget::Fader>     Fader;
 
 // ............................................................................
-// 2. CLASES BASE DE VENTANAS
+// 2. CLASE BASE PARA VENTANAS (SIN APIS OBSOLETAS)
 // ............................................................................
 
 struct WindowBase : Window
 {
-    // [C4 ARCHITECTURE] Flags requeridos por Traits en app.details.h
     enum { UsesGraphics = 1, DropShadow = 0, SysCaption = 0 };
 
     virtual ~WindowBase() {}
 
     /**
-     * [C4 FIX] REEMPLAZO DE centerAt()
-     * Eliminamos la llamada a rect() (obsoleto). 
-     * Usamos la geometría pura definida en window.h.
+     * [C4 ARCHITECTURE FIX] centerAt
+     * Eliminamos la llamada al inexistente rect().
+     * Usamos la geometría pura de la base Window.
      */
     void centerAt(const Window* at = nullptr)
     {
-        // Obtenemos el rectángulo de referencia (Monitor o Padre)
+        // Rectángulo de destino (Pantalla o ventana padre)
         Rect r = (!at || !at->handle) 
             ? Rect(screenSize()) 
             : Rect(at->position(), at->size());
 
-        // Obtenemos nuestro propio tamaño (vía base Window)
+        // Tamaño actual usando el método de la clase base Window
         Size s = this->size();
 
-        // Calculamos posición centrada y aplicamos
+        // Cálculo de posición centrada sin métodos auxiliares eliminados
         this->position(r.x + (r.w - s.w) / 2, r.y + (r.h - s.h) / 2);
     }
-
-    /**
-     * [C4 FIX] REEMPLAZO DE size()
-     * Eliminamos Window::rect().size() por ser API eliminada.
-     */
-    Size size() const { return Window::size(); }
     
     void clientSize(int w, int h)
     {
@@ -68,56 +63,57 @@ struct WindowBase : Window
             ::GetWindowLong(handle, GWL_EXSTYLE));
         this->size(r.right - r.left, r.bottom - r.top);
     }
-
-    // Sincronización de métodos base
+    
+    // Exponemos explícitamente los métodos de la base nativa para evitar ambigüedad
     using Window::size;
     using Window::position;
     using Window::text;
+
+    static Size screenSize() {
+        return Size(::GetSystemMetrics(SM_CXSCREEN), ::GetSystemMetrics(SM_CYSCREEN));
+    }
 };
 
 // ............................................................................
-// 3. CAPAS Y JERARQUÍA DE UI
+// 3. CAPA BASE (LIFECYCLE MODERNO)
 // ............................................................................
 
 struct LayerBase : WindowBase, widget::Parent
 {
     enum { isLayer = true };
 
-    // Implementación de widget::Parent (Contrato obligatorio)
+    // Implementación de Parent requerida por widgets.h
     Window* window() override { return this; }
     
-    /**
-     * [C4 FIX] GESTIÓN DE OWNERSHIP
-     * Se usa el pool de autorelease de la aplicación global.
-     */
+    // [C4 ARCHITECTURE FIX] attach() ahora usa el pool de la aplicación
     void attach(ReleaseAny* obj) override {
         if (obj) app->autorelease.add(obj);
     }
 
     virtual bool open() { return true; }
+    
+    // [C4 ARCHITECTURE FIX] Reemplazo de destroy() por close() nativo
     virtual void close() {
         if (handle) {
             ::DestroyWindow(handle);
             handle = nullptr;
         }
     }
-
+    
     virtual ~LayerBase() { close(); }
 };
 
 // ............................................................................
-// 4. SISTEMA DE PESTAÑAS (Mapeo Nativo)
+// 4. CONTROL DE PESTAÑAS (NATIVO)
 // ............................................................................
 
 struct LayerTabs : widget::Base
 {
-    // [C4 FIX] Type obligatorio para widget::Ctor
-    typedef LayerTabs Type;
-    static const char* class_() { return WC_TABCONTROL; }
+    typedef LayerTabs Type; // Requerido por el factory widget::Ctor
 
     /**
-     * [C4 FIX] IMPLEMENTACIÓN DE add()
-     * El modelo actual no permite stubs; realizamos la inserción real en Win32.
+     * [C4 FIX] add()
+     * Inserción real de pestañas Win32 sin depender de stubs antiguos.
      */
     void add(const char* name, Window* window)
     {
@@ -131,20 +127,19 @@ struct LayerTabs : widget::Base
 
         if (window && window->handle) {
             ::SetParent(window->handle, handle);
-            // Ajuste de área de cliente para el contenido de la pestaña
             RECT r; ::GetClientRect(handle, &r);
+            // Ajuste de offset para el área de dibujo de la pestaña
             ::MoveWindow(window->handle, 2, 25, r.right - 4, r.bottom - 27, TRUE);
-            window->show(count == 0); // Solo mostramos la primera por defecto
         }
     }
-
-    Size size() {
+    
+    Size size() const {
         RECT r; ::GetClientRect(handle, &r);
         return Size(r.right, r.bottom);
     }
 };
 
-// Typedef para el plugin (C4 compatibility)
+// Typedef final para cumplimiento de sa.editor.h
 typedef Ptr<LayerTabs> LayerTabsPtr;
 
 } // ~ native

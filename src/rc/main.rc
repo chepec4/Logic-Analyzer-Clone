@@ -1,22 +1,12 @@
+// Wrapper modular (Opcional)
+#include <windows.h>
 
-#include <winres.h>
+// Icono
+101 ICON "../main.ico"
 
-#define APSTUDIO_READONLY_SYMBOLS
+// Manifiesto
+1 RT_MANIFEST "../main.manifest"
 
-// icon note: 
-// not much sense to put icon into the dll since it's not shown
-// anywhere since 1.05:
-// main icon "main.ico"
-
-// manifest note:
-// Actually it's really necessary only for certain old hosts that force
-// some ancient comctl32 version and break a few things in the Settings 
-// window (transparent bitmaps etc.)
-
-#define MANIFEST_RESOURCE_ID 2
-MANIFEST_RESOURCE_ID RT_MANIFEST "manifest"
-
+// Sub-recursos
 #include "dialogs.rc"
 #include "version.rc"
-
-#undef APSTUDIO_READONLY_SYMBOLS

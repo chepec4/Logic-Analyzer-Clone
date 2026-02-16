@@ -1,4 +1,3 @@
-
 #ifndef KALI_UI_NATIVE_WIDGETS_BASE_INCLUDED
 #define KALI_UI_NATIVE_WIDGETS_BASE_INCLUDED
 
@@ -17,6 +16,8 @@ namespace widget {
 
 struct Parent
 {
+    // Nota: Window* depende de la definición forward o include de la plataforma.
+    // Esto se resolverá al compilar con libraries/win/kali/window.h
     virtual Window* window()         = 0;
     virtual void attach(ReleaseAny*) = 0;
     virtual ~Parent() {}
@@ -30,9 +31,10 @@ struct Interface : ui::widget::Interface, UsesCallback
     virtual string text() const    = 0;
     virtual void text(const char*) = 0;
 
+    // Acceso al handle nativo (HWND en Windows, NSView en Mac)
     virtual Window::Handle expose() const = 0;
 
-    Callback extCallback; // FIXME, todo
+    Callback extCallback;
 };
 
 // ............................................................................
@@ -41,7 +43,5 @@ struct Interface : ui::widget::Interface, UsesCallback
 } // ~ namespace native
 } // ~ namespace ui
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ KALI_UI_NATIVE_WIDGETS_BASE_INCLUDED

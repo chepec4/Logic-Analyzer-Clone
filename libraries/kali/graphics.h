@@ -1,14 +1,19 @@
-#ifndef KALI_GRAPHICS_INCLUDED
-#define KALI_GRAPHICS_INCLUDED
+#ifndef KALI_NOOP_INCLUDED
+#define KALI_NOOP_INCLUDED
 
-#include "kali/platform.h"
+// ............................................................................
 
-#if WINDOWS_
-#include "kali/graphics.gdiplus.h"
-#elif MACOSX_
-#include "kali/graphics.cocoa.h"
-#else
-#error not implemented.
-#endif
+struct NoOp
+{
+    // [C4 OPTIMIZATION] Modernización a Variadic Templates (C++17)
+    // Esto reemplaza las 8 sobrecargas manuales anteriores.
+    // Acepta cualquier cantidad de argumentos de cualquier tipo y no hace nada.
+    // El compilador optimizará estas llamadas eliminándolas completamente (Dead Code Elimination).
+    
+    template <typename... Args>
+    void operator () (Args&&...) const {}
+};
 
-#endif // ~ KALI_GRAPHICS_INCLUDED
+// ............................................................................
+
+#endif // ~ KALI_NOOP_INCLUDED

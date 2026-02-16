@@ -1,15 +1,10 @@
-
 #ifndef KALI_GEOMETRY_INCLUDED
 #define KALI_GEOMETRY_INCLUDED
 
 #include "kali/runtime.h"
 
-// ............................................................................
-
 namespace kali     {
 namespace geometry {
-
-// ............................................................................
 
 template <typename T, int Unique = 0>
 struct Size
@@ -24,8 +19,6 @@ struct Size
     T    height() const {return h;}
     bool empty()  const {return !((w > 0) && (h > 0));}
 };
-
-// ............................................................................
 
 template <typename T, int Unique = 0>
 struct Point
@@ -46,8 +39,6 @@ struct Point
         return *this;
     }
 };
-
-// ............................................................................
 
 template <template <typename, int> class T, typename V, int U>
 T<V, U> offset(const T<V, U>& a, const Point<V, U>& b)
@@ -72,37 +63,31 @@ T<V, U> expand(const T<V, U>& a, const Size<V, U>& b)
 template <typename T>
 T unite(const T& a, const T& b)
 {
-    T r(min(a.x, b.x), min(a.y, b.y));
-    r.w = max(a.right(),  b.right())  - r.x;
-    r.h = max(a.bottom(), b.bottom()) - r.y;
+    T r(kali::min(a.x, b.x), kali::min(a.y, b.y));
+    r.w = kali::max(a.right(),  b.right())  - r.x;
+    r.h = kali::max(a.bottom(), b.bottom()) - r.y;
     return r;
 }
 
 template <typename T>
 T intersect(const T& a, const T& b)
 {
-    T r(max(a.x, b.x), max(a.y, b.y));
-    r.w = min(a.right(),  b.right())  - r.x;
-    r.h = min(a.bottom(), b.bottom()) - r.y;
+    T r(kali::max(a.x, b.x), kali::max(a.y, b.y));
+    r.w = kali::min(a.right(),  b.right())  - r.x;
+    r.h = kali::min(a.bottom(), b.bottom()) - r.y;
     return r;
 }
 
 template <typename T>
 bool equal(const T& a, const T& b)
 {
-    return a.x == b.x
-        && a.y == b.y
-        && a.w == b.w
-        && a.h == b.h;
+    return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h;
 }
 
 template <typename T>
 bool intersects(const T& a, const T& b)
 {
-    return a.x < b.right()
-        && a.y < b.bottom()
-        && a.right()  > b.x
-        && a.bottom() > b.y;
+    return a.x < b.right() && a.y < b.bottom() && a.right() > b.x && a.bottom() > b.y;
 }
 
 template <template <typename, int> class T, typename V, int U> T<V, U>
@@ -111,8 +96,6 @@ template <typename T> T
 operator |  (const T& a, const T& b) {return unite(a, b);}
 template <typename T> T
 operator &  (const T& a, const T& b) {return intersect(a, b);}
-
-// ............................................................................
 
 template <typename T, int Unique = 0>
 struct Rect
@@ -144,13 +127,9 @@ struct Rect
     void size(const Size& s)   {size(s.w, s.h);}
 
     bool contains(const Point& p) const {return contains(p.x, p.y);}
-
     bool contains(T x_, T y_) const
     {
-        return x_ >= x
-            && x_ < right()
-            && y_ >= y
-            && y_ < bottom();
+        return x_ >= x && x_ < right() && y_ >= y && y_ < bottom();
     }
 
     bool  equal(const Rect& r)      const {return geometry::equal(*this, r);}
@@ -165,11 +144,7 @@ struct Rect
     Rect& operator += (const Point& p)      {return  offset(p);}
 };
 
-// ............................................................................
-
 } // ~ namespace geometry
-
-// ............................................................................
 
 typedef geometry::Point <int>   Point;
 typedef geometry::Size  <int>   Size;
@@ -181,10 +156,6 @@ typedef geometry::Rect  <float> RectF;
 typedef geometry::Rect  <int,    1> Margin;
 typedef geometry::Point <double, 2> Scale;
 
-// ............................................................................
-
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // KALI_GEOMETRY_INCLUDED

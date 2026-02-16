@@ -1,17 +1,13 @@
-
 #ifndef KALI_STRING_INCLUDED
 #define KALI_STRING_INCLUDED
 
 #include <string.h>
 #include <stdarg.h>
 #include "kali/platform.h"
-
-// ............................................................................
+#include <cstdio> // vsnprintf
 
 namespace kali    {
 namespace details {
-
-// ............................................................................
 
 template <unsigned Size>
 struct String
@@ -43,14 +39,9 @@ private:
     template <typename T> String(T);
     template <typename T> operator T () const;
 
-    // ........................................................................
-    // extra helpers:
-
 public:
-
     const char* append(const char* src)
     {
-        // meet Schlemiel
         size_t n = strlen(data);
         copy(data + n, src, int(size - n));
         return data;
@@ -64,20 +55,13 @@ public:
     static char* w2a(char (&dst)[n], const wchar_t* src)      {return copy(dst, src, n);}
     static char* w2a(char* dst, const wchar_t* src, int n)    {return copy(dst, src, n);}
 
-
-    #if MACOSX_
-
-    static NSString* ns(const char* src)
-    {
-        return !src ? nil :
-            [NSString stringWithCString:src
-                encoding:NSMacOSRomanStringEncoding];
+#if MACOSX_
+    static NSString* ns(const char* src) {
+        return !src ? nil : [NSString stringWithCString:src encoding:NSMacOSRomanStringEncoding];
     }
-
-    #endif
+#endif
 
 private:
-
     template <typename A, typename B>
     static A* copy(A* restrict_ dst, const B* restrict_ src, int n)
     {
@@ -87,23 +71,12 @@ private:
         *p = 0;
         return dst;
     }
-
-    // ........................................................................
-
-}; // ~ struct String
-
-// ............................................................................
+};
 
 } // ~ namespace details
 
-// ............................................................................
-
 typedef details::String <256> string;
 
-// ............................................................................
-
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ KALI_STRING_INCLUDED

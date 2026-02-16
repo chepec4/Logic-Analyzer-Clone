@@ -1,13 +1,16 @@
+// ============================================================================
+// SP LIBRARY UNIT TEST / PLAYGROUND
+// No se incluye en el DLL final. Usar para depurar algoritmos DSP aislados.
+// ============================================================================
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
+#include <malloc.h> // _mm_malloc
 
 #include "kali/platform.h"
 
-// ............................................................................
-
-#if 0
+// Modo Debug para pruebas
+#if 0 
 
 #define DBG 1
 #include "analyzer.h"
@@ -19,65 +22,41 @@ void usage()
     int bo[] = {3, 4, 6};
     int nbo  = sizeof(bo)/sizeof(*bo);
 
-    Analyzer a;
+    // [C4 FIX] Constructor actualizado
+    Analyzer a(44100); 
+
+    // Test de re-configuración
     for (int i = 0; i < nbo; i++)
         for (int j = 0; j < nfs; j++)
             for (int k = 0; k < 3; k++)
-                a.update(fs[j] << k, bo[i]);
+                a.update((float)(fs[j] << k), bo[i]);
 
     /*
-    Analyzer a;
-    a.update(44100, 4);
-
+    // Ejemplo de proceso
     const int n = 200;
-    float in[n] = {0};
-    in[0] = 1;
+    // Aligned allocation para SSE
+    float* in = (float*)_mm_malloc(n * sizeof(float), 16);
+    memset(in, 0, n * sizeof(float));
+    in[0] = 1.0f; // Impulso
 
-    a.process(in, n);*/
+    const float* ins[] = { in, in };
+    a.process(ins, n, 0); // 0 = Left channel
+    
+    _mm_free(in);
+    */
 }
-
-// ............................................................................
 
 #else
 
+// Test de SIMD básico
 #define trace printf
-
-// .... simd.h:
-
 #include "sp/sp.h"
 
 using namespace sp;
 
 inline m128 inter(const m128& x, const m128& y)
 {
-    return _mm_sub_ps(shuffle<0, 2, 1, 2>
-        (shuffle<3, 3, 0, 0>(y, x), x), x);
-
-    // old version:
-    /* return _mm_sub_ps(_mm_move_ss
-        (shuffle<0, 0, 1, 2>(x, x),
-         shuffle<3, 2, 1, 0>(y, y)), x); */
-}
-
-// ............................................................................
-
-void usage()
-{
-    mm4 y_ = {0.f, 1.f, 2.f, 3.f};
-    mm4 x_ = {4.f, 5.f, 6.f, 7.f};
-    m128 y = y_;
-    m128 x = x_;
-    m128 z = shuffle<1, 2, 3, 0>(y, y);
-    z = z;
+    return _mm_sub_ps(shuffle<0, 2, 0, 2>(x, y), shuffle<1, 3, 1, 3>(x, y));
 }
 
 #endif
-
-// ............................................................................
-
-int main()
-{
-    usage();
-	system("pause");
-	return 0;
-}

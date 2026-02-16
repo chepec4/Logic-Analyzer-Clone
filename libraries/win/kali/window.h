@@ -4,7 +4,7 @@
 #include "kali/platform.h"
 #include "kali/string.h"
 
-// Bloqueo de colisión con la librería de geometría externa si existe
+// Evitamos conflictos con la geometría de Kali Core
 #ifndef KALI_GEOMETRY_INCLUDED
 #define KALI_GEOMETRY_INCLUDED
 #endif
@@ -13,12 +13,11 @@
 
 namespace kali {
 
-// Declaraciones adelantadas para evitar dependencias circulares
+// Forward declarations
 namespace graphics { struct BufferedContext; }
-namespace ui { namespace native { namespace widget { struct Base; } } }
 
 // ============================================================================
-// ESTRUCTURAS DE GEOMETRÍA NATIVAS
+// GEOMETRÍA COMPACTA
 // ============================================================================
 
 struct Point { int x, y; Point(int x=0, int y=0):x(x),y(y){} };
@@ -32,7 +31,7 @@ struct Rect  {
 };
 
 // ============================================================================
-// CLASE WINDOW (WRAPPER WIN32)
+// WRAPPER DE VENTANA NATIVA (x64 SAFE)
 // ============================================================================
 
 struct Window
@@ -44,7 +43,7 @@ struct Window
     operator Handle () const { return handle; }
 
     /**
-     * [C4 MASTER FIX] Recuperar puntero C++ desde el HWND.
+     * [C4 MASTER FIX] Vinculación Objeto <-> HWND
      * Soluciona: error: 'struct kali::Window' has no member named 'object'
      */
     template <typename T>
@@ -52,62 +51,32 @@ struct Window
         return reinterpret_cast<T*>(::GetWindowLongPtr(handle, GWLP_USERDATA));
     }
 
-    /**
-     * Vincular puntero C++ al HWND.
-     */
     void object(void* ptr) {
         ::SetWindowLongPtr(handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ptr));
     }
 
-    void invalidate(bool erase = false) const { 
-        if (handle) ::InvalidateRect(handle, nullptr, erase ? TRUE : FALSE); 
-    }
-    
+    void invalidate(bool erase = false) const { if (handle) ::InvalidateRect(handle, nullptr, erase ? TRUE : FALSE); }
     void update() const { if (handle) ::UpdateWindow(handle); }
     void show(int cmd = SW_SHOW) const { if (handle) ::ShowWindow(handle, cmd); }
-    bool visible() const { return handle && (::IsWindowVisible(handle) != FALSE); }
-
+    
     void text(const char* s) { if (handle) ::SetWindowTextA(handle, s ? s : ""); }
     string text() const {
-        char buf[512];
-        if (handle) {
-            ::GetWindowTextA(handle, buf, 511);
-            return string("%s", buf);
-        }
-        return string();
+        char buf[512] = {0};
+        if (handle) ::GetWindowTextA(handle, buf, 511);
+        return string("%s", buf);
     }
 
-    Point position() const { 
-        RECT r = {0}; 
-        if (handle) ::GetWindowRect(handle, &r); 
-        return Point(r.left, r.top); 
-    }
-
-    Size size() const { 
-        RECT r = {0}; 
-        if (handle) ::GetClientRect(handle, &r); 
-        return Size(r.right, r.bottom); 
-    }
-
-    void position(int x, int y) {
-        if (handle) ::SetWindowPos(handle, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    void size(int w, int h) {
-        if (handle) ::SetWindowPos(handle, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    void size(Size s) { size(s.w, s.h); }
-
+    Point position() const { RECT r = {0}; if (handle) ::GetWindowRect(handle, &r); return Point(r.left, r.top); }
+    Size size() const { RECT r = {0}; if (handle) ::GetClientRect(handle, &r); return Size(r.right, r.bottom); }
+    
     void centerAt(const Window* parent = nullptr) {
         Rect target;
         if (!parent) target = Rect(0, 0, ::GetSystemMetrics(SM_CXSCREEN), ::GetSystemMetrics(SM_CYSCREEN));
         else target = Rect(parent->position(), parent->size());
         Size mySize = size();
-        position(target.x + (target.w - mySize.w) / 2, target.y + (target.h - mySize.h) / 2);
+        ::SetWindowPos(handle, nullptr, target.x + (target.w - mySize.w) / 2, target.y + (target.h - mySize.h) / 2, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 };
 
-} // ~ namespace kali
-
-#endif // ~ KALI_WINDOW_INCLUDED
+} // namespace kali
+#endif

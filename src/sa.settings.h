@@ -2,10 +2,13 @@
 #define SA_SETTINGS_INCLUDED
 
 #include "kali/runtime.h"
+#include "kali/function.h"
+#include "kali/string.h"
 #include "kali/settings.h"
 #include "kali/geometry.h"
 #include "analyzer.h"
 #include "version.h"
+#include <cstring>
 
 namespace sa {
 
@@ -20,10 +23,12 @@ namespace settings {
     };
     
     struct Type : kali::UsesCallback {
-        int* data;
-        Type(int* p) : data(p) {}
-        void operator()(int i, int v, bool notify=true) { data[i] = v; if(notify) callback(i); }
-        int operator()(int i) const { return data[i]; }
+        int* internalData;
+        Type(int* p) : internalData(p) {}
+        void operator()(int i, int v, bool notify=true) { 
+            if (internalData[i] != v) { internalData[i] = v; if(notify) callback(i); } 
+        }
+        int operator()(int i) const { return internalData[i]; }
     };
 }
 
@@ -31,24 +36,27 @@ namespace config {
     using namespace settings;
     const int ParameterCount = 32; 
     const int SettingsIndex = 5;
-    const int presetVersion = 2;
     const int pollTime = 48;
-    const int infEdge = -200;
+    const int infEdge  = -200;
 
     enum BarType { Bar, Curve, CurveFill };
 
     struct Defaults {
-        const char* operator()(int i, int (&dst)[ParameterCount]) const { return "Default"; }
+        const char* operator()(int i, int (&dst)[ParameterCount]) const {
+            std::memset(dst, 0, sizeof(dst));
+            return "Default";
+        }
         const int* data() const { static int v[ParameterCount] = {0}; return v; }
     };
 }
 
-// Forward declarations de la UI
+// Forward declarations necesarias para Shared
 struct Editor;
 struct Display;
 
 /**
- * [C4 MASTER FIX] Definición física de Shared para evitar 'incomplete type'
+ * [C4 MASTER SYNC] Definición completa de Shared.
+ * Esto elimina el error 'field shared has incomplete type sa::Shared'
  */
 struct Shared {
     Editor* editor;
@@ -63,6 +71,5 @@ struct Shared {
     }
 };
 
-} // ~ namespace sa
-
-#endif // ~ SA_SETTINGS_INCLUDED
+} // namespace sa
+#endif

@@ -140,7 +140,9 @@ namespace sp {
 
 } // namespace sp
 
+// Inclusión de módulos satélite
 #include "sp/coefficients.h"
 #include "sp/more.h"
+#include "sp/curves.h"
 
 #endif

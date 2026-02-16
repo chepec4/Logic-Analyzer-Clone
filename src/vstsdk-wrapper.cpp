@@ -1,35 +1,26 @@
-#include "includes.h"
-
 /**
- * VST SDK WRAPPER — RECONSTRUCCIÓN ESTRUCTURAL (C4 DEFINITIVE)
- * Optimizado para: MinGW-w64 GCC 12.2 / C++17
- * * Este archivo compila la implementación base del VST SDK. 
- * Se utilizan pragmas de GCC para ignorar advertencias de un SDK legacy
- * que no cumple con los estándares modernos de C++.
+ * VST SDK UNITY BUILD WRAPPER
+ * * Este archivo compila la implementación del SDK de Steinberg.
+ * Permite aislar los warnings del código legacy (C++98) del resto del proyecto.
  */
 
-#if defined(__GNUC__) || defined(__clang__)
+// Desactivar warnings de seguridad de CRT para el código antiguo de Steinberg
+#define _CRT_SECURE_NO_WARNINGS
+
+// Silenciar warnings específicos de GCC/MinGW para el SDK
+#if defined(__GNUC__)
     #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wunused-parameter"
-    #pragma GCC diagnostic ignored "-Wunused-variable"
-    #pragma GCC diagnostic ignored "-Wchar-subscripts"
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     #pragma GCC diagnostic ignored "-Wwrite-strings"
+    #pragma GCC diagnostic ignored "-Wconversion"
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+    #pragma GCC diagnostic ignored "-Wcast-qual"
 #endif
 
-// Inclusión de la implementación del SDK de Steinberg
-// Las rutas están resueltas por los flags -I del Makefile
+// Inclusión de la implementación del SDK (Unity Build)
+// El makefile ya tiene los -I correctos para encontrar estos archivos
 #include "audioeffect.cpp"
 #include "audioeffectx.cpp"
 
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__)
     #pragma GCC diagnostic pop
 #endif
-
-/**
- * JUSTIFICACIÓN ARQUITECTÓNICA:
- * Al incluir los archivos .cpp del SDK aquí, consolidamos la lógica del host
- * en una sola unidad de traducción. Esto permite al compilador aplicar
- * optimizaciones de inter-procedimiento (IPO) que son vitales para reducir
- * el overhead de comunicación entre el DAW y el C4 Analyzer.
- */

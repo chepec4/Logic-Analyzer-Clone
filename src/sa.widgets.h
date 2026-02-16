@@ -8,65 +8,58 @@ namespace sa {
 
 using namespace kali;
 
-/**
- * RASTREADOR DE POSICIÓN DE MOUSE (Logic Pro Precision)
- * Esta plantilla añade capacidades de tracking a cualquier capa visual (LayerBase).
- * Es fundamental para el cálculo del 'Pointer Info' (Freq/dB).
- */
+// ============================================================================
+// MIXIN: TRACKING DE POSICIÓN DE RATÓN
+// ============================================================================
+// Añade capacidad de detectar MouseLeave a cualquier ventana/layer base.
+
 template <typename Base>
 struct TrackMousePosition : Base
 {
-    // Constructor inicializa el mouse fuera de rango
+    // Coordenada local del mouse (-1, -1 indica fuera)
+    Point mousePos;
+
     TrackMousePosition() : mousePos(-1, -1) {}
 
-    // [C4 FIX] Gestión de movimiento con re-activación de tracking
+    // Callback de movimiento (debe ser invocado desde el hook de mensajes o dispatch)
     bool mouseMove(int x, int y)
     {
-        // Si el mouse estaba fuera, habilitamos el evento de salida de Win32
+        // Si el mouse estaba "fuera", reactivamos el rastreo de salida
         if (mousePos.x < 0) {
             enableMouseLeave();
         }
         
-        // Actualizamos coordenadas usando el tipo consolidado de window.h
         mousePos = Point(x, y);
         
-        // Invalida la zona para redibujar el Pointer Info de Logic
+        // Invalidamos (false = sin borrar fondo) para redibujar la info
         this->invalidate(false);
         return true;
     }
 
-    // [C4 FIX] Implementación obligatoria para evitar 'Pointer info' huérfano
+    // Callback de salida (Mouse Leave)
     bool mouseLeave()
     {
-        // Invalidamos la posición para que sa::Display deje de dibujar el cuadro
         mousePos = Point(-1, -1);
         this->invalidate(false);
         return true;
     }
 
 private:
-
-    /**
-     * Activa el servicio de notificación del sistema para cuando el mouse
-     * sale del área del plugin. Es vital para la estabilidad de la UI.
-     */
+    // Activa la notificación WM_MOUSELEAVE en Windows
     void enableMouseLeave() const
     {
         TRACKMOUSEEVENT tme;
         tme.cbSize      = sizeof(tme);
         tme.dwFlags     = TME_LEAVE;
-        // [C4 FIX] 'this->handle' es obligatorio en plantillas dependientes
-        tme.hwndTrack   = this->handle;
+        // [C4 FIX] Acceso explícito a 'handle' dependiente de la clase base
+        tme.hwndTrack   = this->handle; 
         tme.dwHoverTime = HOVER_DEFAULT;
         
+        // Ignoramos error si falla, no es crítico
         ::TrackMouseEvent(&tme);
     }
-
-protected:
-    // Coordenadas actuales del cursor relativas a la rejilla del analizador
-    Point mousePos;
 };
 
 } // ~ namespace sa
 
-#endif // ~ SA_WIDGETS_INCLUDED
+#endif

@@ -17,75 +17,39 @@ struct Plugin :
     PresetHandler <Plugin, 9, sa::config::ParameterCount>
 {
     typedef PresetHandler <Plugin, 9, sa::config::ParameterCount> Base;
+    
+    void suspend() { analyzerUpdate(); }
 
-    void suspend()
-    {
-        tf
-        analyzerUpdate();
-    }
-
-    void setSampleRate(float rate)
-    {
+    void setSampleRate(float rate) {
         Base::setSampleRate(rate);
         analyzerUpdate();
     }
 
-    void settingsChanged(int index)
-    {
-        // trace.full("%s: %i\n", FUNCTION_, index);
-
-        if (index == sa::settings::bandsPerOctave)
-            analyzerUpdate();
-
-        if (shared.display)
-            shared.display->settingsChanged();
-
+    void settingsChanged(int index) {
+        if (index == sa::settings::bandsPerOctave) analyzerUpdate();
+        if (shared.display) shared.display->settingsChanged();
         this->invalidatePreset();
     }
 
-    void analyzerUpdate()
-    {
+    void analyzerUpdate() {
         using namespace sa::settings;
-
         const int bpo[] = {3, 4, 6};
-        analyzer.update(sampleRate, bpo
-            [shared.settings(bandsPerOctave)]);
-
-        trace.full("%s(%.0f): nBands %i"
-            ", [%.2f %.2f]\n", FUNCTION_,
-            sampleRate, analyzer.nBands,
-            analyzer.freqMin, analyzer.freqMax);
+        analyzer.update(sampleRate, bpo[shared.settings(bandsPerOctave)]);
     }
 
     template <typename T> inline_
-    void process(const T* const* in, T* const* out, int n)
-    {
-        // 1. Bypass (copia directa si es necesario)
+    void process(const T* const* in, T* const* out, int n) {
         bypass(in, out, n);
-        
-        // 2. Procesa el análisis (C4 Engine)
-        int ch = shared.settings
-            (sa::settings::inputChannel);
+        int ch = shared.settings(sa::settings::inputChannel);
         analyzer.process(in, n, ch);
     }
 
     template <typename T> inline_
-    static void bypass(const T* const* in, T* const* out, int n)
-    {
-        const T* in0  =  in[0];
-        const T* in1  =  in[1];
-              T* out0 = out[0];
-              T* out1 = out[1];
-
-        if ((in0 == out0) &&
-            (in1 == out1))
-                return;
-
-        while (--n >= 0)
-        {
-            *out0++ = *in0++;
-            *out1++ = *in1++;
-        }
+    static void bypass(const T* const* in, T* const* out, int n) {
+        const T* in0  =  in[0]; const T* in1  =  in[1];
+              T* out0 = out[0];       T* out1 = out[1];
+        if ((in0 == out0) && (in1 == out1)) return;
+        while (--n >= 0) { *out0++ = *in0++; *out1++ = *in1++; }
     }
 
 #if PERF
@@ -100,77 +64,47 @@ struct Plugin :
 
     const int (&getPreset() const)[sa::config::ParameterCount] {return shared.parameter;}
 
-    void setPreset(int (&value)[sa::config::ParameterCount])
-    {
-        using namespace sa::config;
-        using sa::config::ParameterCount;
+    void setPreset(int (&value)[sa::config::ParameterCount]) {
+        using namespace sa::config; // [C4 FIX] Namespace Scope
         namespace p = parameters;
 
-        if (!sa::legacy::convertPreset(value))
-            return trace("%s: unsupported preset version %i\n",
-                FUNCTION_, value[p::version]);
+        if (!sa::legacy::convertPreset(value)) return;
 
-        bool applyColors = !Settings(prefsKey).get
-            (PrefName()[keepColors], prefs[keepColors].default_);
-        int n = applyColors ? Count : ColorsIndex;
+        // [C4 FIX] Uso explícito de ::Settings para evitar conflicto
+        bool applyColors = !::Settings(prefsKey).get(PrefName()[keepColors], prefs[keepColors].default_);
+        int n = applyColors ? sa::settings::Count : sa::settings::ColorsIndex;
+        
         for (int i = 0; i < n; i++)
             shared.settings(i, value[i + SettingsIndex], false);
-
+        
         analyzerUpdate();
 
-        if (shared.editor)
-            shared.editor->settingsChanged(applyColors);
-
-        if (shared.display)
-            shared.display->settingsChanged();
-        else
-        {
-            // apply display settings only if it's not yet on screen
-            if (Settings(prefsKey).get(PrefName()
-                [smartDisplay], prefs[smartDisplay].default_))
-            {
-                for (int i = p::w; i <= p::h; i++)
-                    shared.parameter[i] = value[i];
+        if (shared.editor) shared.editor->settingsChanged(applyColors);
+        
+        if (shared.display) shared.display->settingsChanged();
+        else {
+            if (::Settings(prefsKey).get(PrefName()[smartDisplay], prefs[smartDisplay].default_)) {
+                for (int i = p::w; i <= p::h; i++) shared.parameter[i] = value[i];
             }
         }
 
         this->invalidatePreset();
     }
 
-    // ------------------------------------------------------------------------
-    // C4 ANALYZER - IDENTIDAD DEL PLUGIN
-    // ------------------------------------------------------------------------
-    enum
-    {
-        // C4: ID Único generado para evitar conflictos con el original.
-        // Hex: 43 34 41 6E -> "C4An"
+    // Identidad C4 Analyzer
+    enum {
         UniqueID = 'C' << 24 | '4' << 16 | 'A' << 8 | 'n', 
-        
-        // La versión se toma de version.h
         Version  = int(VERSION * 1000),
     };
-
-    // C4: El nombre y la compañía vienen de las macros en version.h
     static const char* name()   {return NAME;}
     static const char* vendor() {return COMPANY;}
 
-    ~Plugin()
-    {
-        // just in case host forgets to call Editor::close before deleting
-        // plugin, get rid of all windows *before* AudioEffect dtor!
-        if (editor)
-        {
-            delete editor;
-            editor = 0;
-        }
-
-        tf
+    ~Plugin() {
+        if (editor) { delete editor; editor = 0; }
     }
 
-    Plugin(audioMasterCallback master)
-        : Base(master, sa::config::Defaults())
+    Plugin(audioMasterCallback master) : Base(master, sa::config::Defaults()), analyzer(44100)
     {
-        tf
         this->setNumInputs(2);
         this->setNumOutputs(2);
         #if PROCESS_DBL
@@ -178,21 +112,16 @@ struct Plugin :
         #endif
 
         shared.analyzer = &analyzer;
-        this->setEditor(new vst::Editor
-            <Plugin, sa::Display>(this));
-        shared.settings.callback.to
-            (this, &Plugin::settingsChanged);
+        this->setEditor(new vst::Editor<Plugin, sa::Display>(this));
+        shared.settings.callback.to(this, &Plugin::settingsChanged);
 
-        analyzerUpdate(); // must init analyzer before editor/display open
+        analyzerUpdate();
     }
 
 public:
     sa::Shared shared;
-
 private:
     Analyzer analyzer;
 };
-
-// ............................................................................
 
 #endif // ~ PLUGIN_INCLUDED

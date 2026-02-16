@@ -2,11 +2,18 @@
 #define KALI_VST_INCLUDED
 
 #include "kali/app.h"
-#include "vst/pluginterfaces/vst2.x/aeffeditor.h"
-#include "vst/pluginterfaces/vst2.x/audioeffectx.h"
+
+// [C4 ARCHITECTURE FIX]
+// El Makefile (V11.0) ya incluye las rutas:
+// -I../libraries/vst/public.sdk/source/vst2.x
+// Por lo tanto, la inclusión debe ser directa, sin prefijos de ruta inexistentes.
+#include "aeffeditor.h"
+#include "audioeffectx.h"
 
 namespace vst {
 
+// ............................................................................
+// CLASE BASE DEL PLUGIN (Wrapper de AudioEffectX)
 // ............................................................................
 
 template <typename Plugin>
@@ -23,10 +30,9 @@ struct PluginBase : AudioEffectX
 
     virtual ~PluginBase() {}
 
-    // Helpers de seguridad VST
     void programsAreChunks(bool v = true) { AudioEffectX::programsAreChunks(v); }
     
-    // Copia segura de strings
+    // Copia segura de strings para VST (Legacy Support)
     static char* copy(char* dst, const char* src, int maxLen)
     {
         int i = 0;
@@ -40,11 +46,14 @@ struct PluginBase : AudioEffectX
 };
 
 // ............................................................................
+// EDITOR DEL PLUGIN (Puente entre VST Host y Kali Window)
+// ............................................................................
 
 template <typename Plugin, typename Window>
 struct Editor : AEffEditor
 {
-    Editor(Plugin* plugin) : plugin(plugin), window(0) {}
+    // [C4 FIX] Inicialización con nullptr (C++17)
+    Editor(Plugin* plugin) : plugin(plugin), window(nullptr) {}
     
     virtual ~Editor() 
     { 
@@ -59,18 +68,19 @@ struct Editor : AEffEditor
 
     bool open(void* ptr) override
     {
-        close(); // Seguridad: cerrar anterior si existe
+        close(); // Seguridad: cerrar instancia previa si existe
         
-        // [C4 ARCHITECTURE FIX] Uso del sistema de ventanas Kali moderno
+        // [C4 ARCHITECTURE] Kali App crea la capa base sobre el HWND del Host
+        // El casting a const kali::Window* es seguro, Kali extrae el HWND internamente.
         if (!kali::app::createLayer(reinterpret_cast<const kali::Window*>(ptr), &window))
             return false;
 
-        // Inyección de dependencia del plugin
+        // "Placement New": Construimos la ventana (sa::Display) en la memoria asignada
         new (window) Window(plugin);
 
         if (!window->open())
         {
-            // [C4 FIX] close() en lugar de destroy()
+            // [C4 FIX] Usamos close() en lugar de destroy() para cumplir el Codex
             window->close(); 
             return false;
         }
@@ -83,27 +93,30 @@ struct Editor : AEffEditor
     {
         if (window)
         {
-            // [C4 ARCHITECTURE FIX] Alineación con LayerBase::close()
+            // [C4 ARCHITECTURE] Delegamos el cierre a Kali (::DestroyWindow)
             window->close();
-            // Kali gestiona la memoria, pero limpiamos el puntero
-            window = 0; 
+            window = nullptr; 
         }
     }
 
     void idle() override 
     {
-        // Hook para tareas en segundo plano si fuera necesario
+        // El framework Kali maneja su propio loop de mensajes (Timer/Hooks)
+        // No requerimos bombeo manual desde el Host VST
     }
 
 private:
     void updateRect()
     {
-        // [C4 FIX] Uso de geometría moderna
-        kali::Rect r(window->position(), window->size());
-        rect_.left   = (short)r.x;
-        rect_.top    = (short)r.y;
-        rect_.right  = (short)(r.x + r.w);
-        rect_.bottom = (short)(r.y + r.h);
+        // Sincronización de geometría Kali -> VST ERect
+        if (window) {
+            // [C4 FIX] Uso de métodos modernos de Window (position/size)
+            kali::Rect r(window->position(), window->size());
+            rect_.left   = (short)r.x;
+            rect_.top    = (short)r.y;
+            rect_.right  = (short)(r.x + r.w);
+            rect_.bottom = (short)(r.y + r.h);
+        }
     }
 
     Plugin* plugin;

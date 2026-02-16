@@ -1,29 +1,19 @@
-
 #ifndef SA_RESIZER_INCLUDED
 #define SA_RESIZER_INCLUDED
 
 #include "kali/ui/native.h"
 
-// ............................................................................
-
 namespace sa {
-
-// ............................................................................
 
 using namespace kali;
 
-/*  The method used here is sort of one big kludge. It (a simplified version) was
-    tempting initially, but now it turns out to be too Host/OS versions/settings
-    depended, and what's most important, it brings too many barely ever fixable
-    side-effects/issues in certain hosts. It becomes a real nightmare to test/
-    improve/maintain this method, so I'm about to give it up in favor of
-    something more safe and simple.
-    (Trivial "resize-triangle"/"near-edges-trigger" with in-Editor-mouse-tracking
-    should be enough and will be equally usable from a user point of view.)
-*/
+// ============================================================================
+// RESIZER: GESTOR DE REDIMENSIONADO DE VENTANA
+// ============================================================================
 
 struct Resizer : ui::native::LayerBase
 {
+    // Lógica de polling llamada desde sa::Display
     int poll(HWND editor_)
     {
         if (!editor)
@@ -33,20 +23,19 @@ struct Resizer : ui::native::LayerBase
             return ::ShowWindow(handle, SW_HIDE);
 
         if (!resizingNow) {
-            Rect r = rect(parent);
+            Rect r = getWindowRect(parent);
             if (curRect != r)
             {
-                tf
                 curRect  = r;
                 return ::SetWindowPos(handle, 0, r.x, r.y, r.w, r.h,
                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
             }
         }
 
-        return ::IsWindowVisible(handle) ? ~0
-            : ::ShowWindow(handle, SW_SHOWNA);
+        return ::IsWindowVisible(handle) ? ~0 : ::ShowWindow(handle, SW_SHOWNA);
     }
 
+    // Hook de mensajes de Windows
     bool msgHook(LRESULT& result, UINT msg, WPARAM wparam, LPARAM lparam)
     {
         switch (msg)
@@ -56,21 +45,18 @@ struct Resizer : ui::native::LayerBase
             break;
 
         case WM_ENTERSIZEMOVE:
-            resizingNow = 1;
+            resizingNow = true;
             break;
 
         case WM_EXITSIZEMOVE:
-            trace.full("msgHook: WM_EXITSIZEMOVE\n");
-            resizingNow = 0;
-            // always return focus to the parent:
+            // trace.full("msgHook: WM_EXITSIZEMOVE\n");
+            resizingNow = false;
             ::SetForegroundWindow(parent);
             break;
 
         case WM_NCHITTEST:
             result = ::DefWindowProc(handle, msg, wparam, lparam);
-            // return HTTRANSPARENT for anything except right and bottom edges:
-            // (can't resize by left/top edges since some (rare) hosts get plugin
-            // window screwed if resized w/o SWP_NOMOVE)
+            // Solo permitimos redimensionar desde la esquina inferior derecha
             switch (result)
             {
             case HTRIGHT:
@@ -86,20 +72,21 @@ struct Resizer : ui::native::LayerBase
         return true;
     }
 
+    // Callback de redimensionado finalizado
     void resized()
     {
         if (resizingNow)
-            resizeEditor(rect(handle));
+            resizeEditor(getWindowRect(handle));
     }
 
 private:
 
-    static Rect rect(HWND handle)
+    // [C4 FIX] Helper estático renombrado para evitar colisión con kali::Rect
+    static Rect getWindowRect(HWND h)
     {
         RECT r;
-        ::GetWindowRect(handle, &r);
-        return Rect(r.left, r.top,
-            r.right - r.left, r.bottom - r.top);
+        ::GetWindowRect(h, &r);
+        return Rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     }
 
     void resizeEditor(const Rect& newRect)
@@ -107,30 +94,23 @@ private:
         int w = newRect.w - curRect.w;
         int h = newRect.h - curRect.h;
         curRect = newRect;
+        
+        // Uso de Window Wrapper moderno
         Size s = Window(editor).size();
         Window(editor).size(s.w += w, s.h += h);
 
         if (plugin->canHostDo("sizeWindow") > 0) {
-            trace.full("%s: hostCanDoSizeWindow\n", FUNCTION_);
             if (plugin->sizeWindow(s.w, s.h))
-                return trace.full("%s: sizeWindow(%i/%+i, %i/%+i) accepted\n",
-                    FUNCTION_, s.w, w, s.h, h); // fixme, do something else?
+                return; 
         }
 
-        trace.full("%s: plugin->sizeWindow() not supported\n", FUNCTION_);
-
-        // todo, actually need to loop through all ancestors
-        // until `parent` one (it's not always just one)
+        // Fallback manual si el host no soporta sizeWindow
         HWND ancestor = ::GetAncestor(editor, GA_PARENT);
-        Rect r = rect(ancestor);
-        trace.full("%s: SetWindowPos(ancestor, 0, 0, %i, %i)\n",
-            FUNCTION_, r.w + w, r.h + h);
-        ::SetWindowPos(ancestor, 0, 0, 0,
-            r.w + w, r.h + h, SWP_NOMOVE | SWP_NOZORDER);
+        Rect r = getWindowRect(ancestor);
+        
+        ::SetWindowPos(ancestor, 0, 0, 0, r.w + w, r.h + h, SWP_NOMOVE | SWP_NOZORDER);
 
         r = newRect;
-        trace.full("%s: SetWindowPos(parent, %i, %i, %i, %i)\n",
-                FUNCTION_, r.x, r.y, r.w, r.h);
         ::SetWindowPos(parent, 0, r.x, r.y, r.w, r.h, SWP_NOMOVE | SWP_NOZORDER);
     }
 
@@ -138,26 +118,29 @@ private:
     {
         editor = editor_;
         parent = editor_;
+        
+        // Búsqueda heurística del padre correcto en la jerarquía del VST
+        char buffer[256];
         string name;
         do
         {
             parent = ::GetAncestor(parent, GA_PARENT);
-            name   = Window(parent).title();
-            trace.full("%s: %p %s\n", FUNCTION_, parent, name());
+            ::GetWindowTextA(parent, buffer, 256);
+            name = string("%s", buffer);
         }
-        while (!strstr(name, NAME)
-            && (::GetWindowLong(parent, GWL_STYLE) & WS_CHILD));
+        while (!strstr(name, NAME) && (::GetWindowLongPtr(parent, GWL_STYLE) & WS_CHILD));
 
         Window p(parent);
-        kali::app->createWindow(&p, this);
+        
+        // [C4 FIX] Creación segura vía App Singleton
+        if (kali::app) kali::app->createWindow(&p, this);
+        
         ::ShowWindow(handle, SW_HIDE);
 
-        // WS_EX_TRANSPARENT does not work in Win7 the way
-        // it did in XP (and Vista?), so one more hack :(
+        // [C4 FIX] Uso de SetWindowLongPtr para compatibilidad x64
         if (LOBYTE(::GetVersion()) > 5) {
-            ::SetWindowLong(handle, GWL_EXSTYLE,
-                ::GetWindowLong(handle, GWL_EXSTYLE)
-                    & ~WS_EX_TRANSPARENT | WS_EX_LAYERED);
+            LONG_PTR exStyle = ::GetWindowLongPtr(handle, GWL_EXSTYLE);
+            ::SetWindowLongPtr(handle, GWL_EXSTYLE, (exStyle & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED);
             ::SetLayeredWindowAttributes(handle, 0, 1, LWA_ALPHA);
         }
     }
@@ -165,13 +148,20 @@ private:
 public:
     Resizer(AudioEffectX* plugin) :
         plugin(plugin),
-        editor(0),
-        parent(0),
-        resizingNow(0)
+        editor(nullptr),
+        parent(nullptr),
+        resizingNow(false)
     {}
 
-    void close() {tf}
-    ~Resizer()   {this->destroy(); tf}
+    // [C4 FIX] Eliminación de 'tf' y uso de Lifecycle moderno
+    void close() override {
+        if (handle) {
+            ::DestroyWindow(handle);
+            handle = nullptr;
+        }
+    }
+    
+    ~Resizer() { close(); }
 
 private:
     AudioEffectX* plugin;
@@ -181,10 +171,10 @@ private:
     bool          resizingNow;
 };
 
-// ............................................................................
-
 } // ~ namespace sa
 
+// ............................................................................
+// TRAITS DEL SISTEMA DE VENTANAS (Template Specialization)
 // ............................................................................
 
 namespace kali    {
@@ -207,7 +197,5 @@ struct Traits <sa::Resizer> : TraitsBase <sa::Resizer>
 
 } // ~ namespace details
 } // ~ namespace kali
-
-// ............................................................................
 
 #endif // ~ SA_RESIZER_INCLUDED

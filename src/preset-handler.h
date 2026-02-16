@@ -8,178 +8,122 @@
 #include <algorithm>
 #include <cstring>
 
-/**
- * ESTRUCTURA DE DATOS DE PRESETS
- * Alineación de memoria garantizada para persistencia VST.
- */
+// ============================================================================
+// ESTRUCTURA DE DATOS (Banco de Presets)
+// ============================================================================
+
 template <int nPresets, int nParameters>
 struct PresetBank
 {
     int  count;
     int  index;
-    // kVstMaxProgNameLen es usualmente 24, reservamos 28 para alineación de 4 bytes.
+    // VST 2.4 define kVstMaxProgNameLen como 24. 
+    // Usamos 28 para padding/alineación segura en memoria.
     char name  [nPresets][28];
     int  value [nPresets][nParameters];
 };
 
-/**
- * PRESET HANDLER - ARQUITECTURA PROTEGIDA
- * Gestiona el intercambio de programas y bancos entre el DAW y el Plugin.
- */
+// ============================================================================
+// GESTOR DE PRESETS (Chunks VST)
+// ============================================================================
+
 template <typename Plugin, int nPresets, int nParameters>
 struct PresetHandler :
     vst::PluginBase <Plugin>,
     PresetBank <nPresets, nParameters>
 {
-    // [C4 FIX] Visibilidad de plantillas para GCC 12
-    typedef vst::PluginBase <Plugin>      Base;
+    typedef vst::PluginBase <Plugin>           Base;
     typedef PresetBank <nPresets, nParameters> Bank;
     
+    // Visibilidad de miembros de la clase base template
     using Bank::count;
     using Bank::index;
     using Bank::name;
     using Bank::value;
 
-    enum {
-        PresetCount    = nPresets,
-        ParameterCount = 1 // VST exige al menos 1 para automatización dummy
-    };
+    // --- Implementación de VST Base ---
 
-    // Métodos virtuales puros que la clase Plugin debe implementar
-    virtual const int (&getPreset() const)[nParameters] = 0;
-    virtual void setPreset(int (&)[nParameters])  = 0;
-
-    // Validación de seguridad para hosts que fallan con 0 parámetros
-    void invalidatePreset() { this->setParameterAutomated(0, 0); }
-
-private:
-    // Gestión interna de parámetros VST (Dummy para compatibilidad)
-    float getParameter(VstInt32) { return doom; }
-    void  setParameter(VstInt32, float v) { doom = v; }
-    bool  canParameterBeAutomated(VstInt32) { return false; }
-    void  getParameterName(VstInt32, char* v) { this->copy(v, "None", 5); }
-
-    // ........................................................................
-
-    VstInt32 getProgram() { return index; }
-
-    void setProgram(VstInt32 i) {
-        if (i >= 0 && i < nPresets) {
+    void setProgram(VstInt32 i) override {
+        if (i >= 0 && i < count) {
             index = i;
-            setPreset(value[i]);
+            // setPreset debe estar definido en la clase derivada 'Plugin'
+            static_cast<Plugin*>(this)->setPreset(value[index]);
         }
     }
 
-    void setProgramName(char* text) {
-        this->copy(name[index], text, kVstMaxProgNameLen);
+    void setProgramName(char* s) override {
+        this->copy(name[index], s, sizeof(*name));
     }
 
-    void getProgramName(char* text) {
-        this->copy(text, name[index], kVstMaxProgNameLen);
+    void getProgramName(char* s) override {
+        this->copy(s, name[index], sizeof(*name));
     }
 
-    bool getProgramNameIndexed(VstInt32, VstInt32 i, char* text) {
-        return (i >= 0 && i < PresetCount)
-            ? !!this->copy(text, name[i], kVstMaxProgNameLen)
-            : false;
-    }
-
-    // ........................................................................
-    // PERSISTENCIA (CHUNKS)
-    // ........................................................................
-
-    VstInt32 getChunk(void** data, bool isPreset) {
-        // Sincronizar preset actual antes de exportar
-        std::memcpy(value[index], getPreset(), sizeof(value[index]));
-
-        if (isPreset) {
-            *data = value[index];
-            return (VstInt32)sizeof(value[index]);
+    bool getProgramNameIndexed(VstInt32 cat, VstInt32 i, char* s) override {
+        if (i >= 0 && i < count) {
+            this->copy(s, name[i], sizeof(*name));
+            return true;
         }
-
-        *data = &count; // Exporta el banco completo (PresetBank)
-        return (VstInt32)sizeof(Bank);
+        return false;
     }
 
-    VstInt32 setChunk(void* data_, VstInt32 size_, bool isPreset) {
-        if (!data_ || size_ <= 0) return 0;
+    // --- Persistencia (Chunks) ---
 
-        // Caso 1: Carga de un solo preset (.fxp)
-        if (isPreset) {
-            int n = (int)(size_ / sizeof(int));
-            n = std::min(n, (int)nParameters);
-            const int* v = (const int*)data_;
-            for (int j = 0; j < n; j++) value[index][j] = v[j];
-            setPreset(value[index]);
-            return 1;
+    // Obtener chunk (Guardar proyecto)
+    VstInt32 getChunk(void** data, bool isPreset) override {
+        // En VST 2.4, los chunks opacos suelen ser del banco completo
+        *data = static_cast<Bank*>(this);
+        return sizeof(Bank);
+    }
+
+    // Cargar chunk (Abrir proyecto)
+    VstInt32 setChunk(void* data, VstInt32 byteSize, bool isPreset) override {
+        if (byteSize != sizeof(Bank)) {
+            // [C4 SAFETY] Validación básica de tamaño para evitar corrupción
+            // Si el tamaño difiere, podríamos intentar una migración parcial aquí,
+            // pero por seguridad retornamos fallo si no coincide la estructura.
+            return 0;
         }
-
-        // Caso 2: Carga de un banco completo (.fxb) - HARDENED LOGIC
-        const char* rawData = (const char*)data_;
-        const size_t totalSize = (size_t)size_;
-        const size_t headerSize = sizeof(count) + sizeof(index);
-
-        if (totalSize < headerSize) return 0;
-
-        // Leer cabecera del banco
-        int filePresetCount = *(const int*)rawData;
-        if (filePresetCount <= 0) return 0;
-
-        int fileIndex = *(const int*)(rawData + sizeof(count));
         
-        // Calcular offsets con protección de desbordamiento
-        const size_t namesTotalSize = (size_t)filePresetCount * sizeof(*name);
-        const size_t valuesOffset = headerSize + namesTotalSize;
-
-        if (valuesOffset > totalSize) return 0;
-
-        // Determinar cuántos parámetros por preset hay en el archivo
-        const size_t remainingBytes = totalSize - valuesOffset;
-        const size_t rowByteSize = (size_t)filePresetCount * sizeof(int);
+        // Carga directa de memoria
+        std::memcpy(static_cast<Bank*>(this), data, sizeof(Bank));
         
-        if (rowByteSize == 0) return 0;
-        int fileParamCount = (int)(remainingBytes / rowByteSize);
-
-        // Punteros de lectura
-        const char* namePtr = rawData + headerSize;
-        const int* valuePtr = (const int*)(rawData + valuesOffset);
-
-        // Copia selectiva respetando los límites del Plugin actual
-        int m = std::min(filePresetCount, (int)nPresets);
-        int n = std::min(fileParamCount, (int)nParameters);
-
-        for (int i = 0; i < m; i++) {
-            this->copy(name[i], namePtr, sizeof(*name));
-            namePtr += sizeof(*name);
-            for (int j = 0; j < n; j++) {
-                value[i][j] = valuePtr[i * fileParamCount + j];
-            }
-        }
-
-        index = (fileIndex >= 0 && fileIndex < nPresets) ? fileIndex : 0;
-        setPreset(value[index]);
-
+        // Restaurar estado actual
+        setProgram(index);
         return 1;
     }
 
-public:
-    template <typename Defaults>
-    PresetHandler(audioMasterCallback master, const Defaults& defaults)
-        : Base(master), doom(0.f)
-    {
-        // VST Opcode: el plugin gestiona su propio guardado/carga
-        this->programsAreChunks();
+    // --- API Pública del Handler ---
 
-        count = nPresets;
-        index = 0;
-        // Inicialización con valores por defecto (Factory Presets)
-        for (int i = 0; i < nPresets; i++) {
-            this->copy(name[i], defaults(i, value[i]), sizeof(*name));
+    // Notificar cambio de parámetro desde UI o Host
+    void invalidatePreset() {
+        // Copiar los valores "vivos" del plugin al almacenamiento del preset actual
+        const int (&currentValues)[nParameters] = static_cast<Plugin*>(this)->getPreset();
+        for (int i = 0; i < nParameters; ++i) {
+            value[index][i] = currentValues[i];
         }
     }
 
-private:
-    float doom; // Parámetro dummy para compatibilidad de Host
+protected:
+    template <typename Defaults>
+    PresetHandler(audioMasterCallback master, const Defaults& defaults)
+        : Base(master) // Inicializa AudioEffectX
+    {
+        // Indicar al host que usamos Chunks para persistencia total
+        this->programsAreChunks(true);
+
+        count = nPresets;
+        index = 0;
+
+        // Inicialización de fábrica
+        for (int i = 0; i < nPresets; ++i) {
+            const char* defaultName = defaults(i, value[i]);
+            this->copy(name[i], defaultName, sizeof(*name));
+        }
+    }
+    
+    // Destructor virtual requerido por herencia
+    virtual ~PresetHandler() {}
 };
 
 #endif

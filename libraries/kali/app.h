@@ -1,18 +1,12 @@
-
 #ifndef KALI_APP_INCLUDED
 #define KALI_APP_INCLUDED
 
 #include "kali/containers.h"
 
-// ............................................................................
-
 namespace kali {
-
-// ............................................................................
 
 struct Window;
 
-// temporary here:
 #if WINDOWS_
 typedef HINSTANCE__ Module;
 #else
@@ -22,7 +16,7 @@ typedef void Module;
 struct app
 {
     template <typename T>
-    static int run(bool ItCouldBeOnlyOne = 1);
+    static int run(bool ItCouldBeOnlyOne = true);
 
     template <typename T>
     static bool createWindow(const Window* parent, T* window);
@@ -45,12 +39,8 @@ struct app
 
 const singleton <app> app;
 
-// ............................................................................
-
 }  // ~ namespace kali
 
 #include "kali/app.details.h"
-
-// ............................................................................
 
 #endif // ~ KALI_APP_INCLUDED

@@ -1,60 +1,64 @@
 #include "includes.h"
 #include "main.h"
-#include "kali/app.dll.h"
+#include "kali/app.dll.h" // Implementa DllMain
 #include <exception>
 
-/**
- * VST 2.4 ENTRY POINT — RECONSTRUCCIÓN ARQUITECTÓNICA (C4 DEFINITIVE)
- * Versión Hardened: Captura de excepciones y protección de punteros.
- */
+// ============================================================================
+// VST 2.4 ENTRY POINT
+// ============================================================================
 
+// [C4 FIX] Definición explícita de exportación para DLL de Windows
 #define VST_EXPORT extern "C" __declspec(dllexport)
 
+// Función principal llamada por el Host (Cubase, FL Studio, etc.)
 VST_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
 {
+    // Chequeo de fugas de memoria en Debug (MSVC)
     #ifdef _CRTDBG_MAP_ALLOC
         _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF | _CRTDBG_LEAK_CHECK_DF);
     #endif
 
-    if (audioMaster == nullptr) return nullptr;
+    if (!audioMaster) return nullptr;
 
+    // Handshake inicial con el Host
+    // audioMasterVersion (2.4) debe estar definido en el SDK
     if (audioMaster(nullptr, audioMasterVersion, 0, 0, nullptr, 0.0f) == 0)
         return nullptr;
 
+    // Inicialización del sistema de trazas
     #if defined(DBG) && (DBG > 0)
         try {
-            // Acceso al objeto global ::trace de kali/dbgutils.h
             ::trace.setLevel(::trace.Full);
         } catch(...) {}
     #endif
 
+    // Creación segura del Plugin
     try {
-        // La clase Plugin debe estar completa tras el fix de sp::AlignedNew
+        // 'Plugin' hereda de AudioEffectX y gestiona su propia memoria (AlignedNew)
         Plugin* plugin = new Plugin(audioMaster);
+        
+        // Obtener la estructura C para el host
         AEffect* effect = plugin->getAeffect();
 
-        if (effect == nullptr) {
+        // Validación crítica
+        if (!effect) {
             delete plugin;
             return nullptr;
         }
+        
         return effect;
     }
     catch (const std::exception& e) {
-        // Log de error específico si el framework lo soporta
-        ::trace.full("Exception in VSTPluginMain: %s\n", e.what());
+        ::trace.full("[FATAL] Exception in VSTPluginMain: %s\n", e.what());
         return nullptr;
     }
     catch (...) {
+        ::trace.full("[FATAL] Unknown exception in VSTPluginMain\n");
         return nullptr;
     }
 }
 
-// Compatibilidad VST Legacy
-VST_EXPORT AEffect* VSTMain(audioMasterCallback audioMaster) {
+// Alias legacy para hosts antiguos (VSTMain)
+VST_EXPORT AEffect* main(audioMasterCallback audioMaster) {
     return VSTPluginMain(audioMaster);
 }
-
-/**
- * [C4 FIX] El DAW busca 'VSTPluginMain' en x64. 
- * 'VSTMain' se incluye como alias para hosts antiguos.
- */

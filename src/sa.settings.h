@@ -1,15 +1,15 @@
 #ifndef SA_SETTINGS_INCLUDED
 #define SA_SETTINGS_INCLUDED
 
-#include "kali/runtime.h"
+#include "kali/runtime.h" // [FIX] Necesario para UsesCallback
 #include "kali/settings.h"
 #include "kali/geometry.h"
 #include "analyzer.h"
 #include "version.h"
 
 namespace sa {
-
 namespace settings {
+
     enum Index { 
         inputChannel, peakEnable, peakDecay, avrgEnable, avrgTime, 
         avrgBarType, avrgBarSize, holdEnable, holdInfinite, holdTime, 
@@ -19,20 +19,27 @@ namespace settings {
         gridLineColor, gridLabelColor, bkgTopColor, bkgBottomColor, Count 
     };
 
+    // [C4 MASTER SYNC] Herencia de callback corregida
     struct Type : kali::UsesCallback {
-        int* data;
-        Type(int* p) : data(p) {}
-        void operator()(int i, int v, bool notify=true) { data[i] = v; if(notify) callback(i); }
-        int operator()(int i) const { return data[i]; }
+        int* internalData;
+        Type(int* p) : internalData(p) {}
+        void operator()(int i, int v, bool notify = true) { 
+            if (internalData[i] != v) { internalData[i] = v; if(notify) callback(i); } 
+        }
+        int operator()(int i) const { return internalData[i]; }
     };
 }
 
 namespace config {
     using namespace settings;
-    const int ParameterCount = 32;
-    const int SettingsIndex = 5;
-    const int barPad = 2; // [FIX] Requerido por sa.display.h
     
+    // [C4 MASTER SYNC] Constantes requeridas por sa.display.h
+    const int pollTime = 48;
+    const int infEdge  = -200;
+    const int barPad   = 2;
+    const int ParameterCount = 32;
+    const int SettingsIndex  = 5;
+
     enum BarType { Bar, Curve, CurveFill };
 
     struct Defaults {
@@ -41,19 +48,15 @@ namespace config {
     };
 }
 
-struct Editor;
-struct Display;
-
-// [C4 MASTER FIX] Definición completa de Shared
+// Estructura de estado compartido (Sincronizada)
 struct Shared {
-    Editor* editor;
-    Display* display;
     Analyzer* analyzer;
     settings::Type settings;
     int parameter[config::ParameterCount];
+    void* display; // Cambiado a void* para evitar circularidad extrema
+    void* editor;
 
-    Shared() : editor(nullptr), display(nullptr), analyzer(nullptr), 
-               settings(parameter + config::SettingsIndex) {
+    Shared() : analyzer(nullptr), settings(parameter + config::SettingsIndex) {
         std::memset(parameter, 0, sizeof(parameter));
     }
 };
